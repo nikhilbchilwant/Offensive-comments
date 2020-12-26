@@ -1,6 +1,6 @@
 {
     "name": "Jigsaw-toxic-comments",
-    "n_gpu": 1,
+    "n_gpu": 4,
 
     "arch": {
         "type": "JigsawBERTmodel",
@@ -16,7 +16,7 @@
             "batch_size": 8,
             "tokenizer_name": "bert-base-uncased",
             "shuffle": true,
-            "validation_split": 0.4,
+            "validation_split": 0.1,
             "num_workers": 4,
             "data_red_factor": 1000
         }
@@ -40,14 +40,14 @@
         }
     },
     "trainer": {
-        "epochs": 10,
+        "epochs": 5,
 
         "save_dir": "/data/users/nchilwant/training_output",
-        "save_period": 5,
+        "save_period": 1,
         "verbosity": 2,
         
         "monitor": "min val_loss",
-        "early_stop": 1,
+        "early_stop": 2,
 
         "tensorboard": false
     }
