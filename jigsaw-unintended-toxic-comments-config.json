@@ -10,12 +10,12 @@
         }
     },
     "data_loader": {
-        "type": "JigsawDataLoader",
+        "type": "JigsawUnintendedToxicDataLoader",
         "args":{
-            "data_dir": "/data/users/nchilwant/dataset/jigsaw-toxic-comment-train.csv",
+            "data_dir": "/data/users/nchilwant/dataset/jigsaw-unintended-bias-train.csv",
             "batch_size": 256,
             "tokenizer_name": "bert-base-uncased",
-            "shuffle": true,
+            "shuffle": false,
             "validation_split": 0.1,
             "num_workers": 4,
             "data_red_factor": 1
@@ -43,7 +43,7 @@
         "epochs": 1,
 
         "save_dir": "/data/users/nchilwant/training_output",
-        "save_period": 1,
+        "save_period": 10,
         "verbosity": 2,
         
         "monitor": "min val_loss",

@@ -110,7 +110,7 @@ class Trainer(BaseTrainer):
         try:
             roc_auc = roc_auc_score(target_labels, toxic_prob)
         except ValueError:
-            pass
+            roc_auc = -1
 
         return self.valid_metrics.result(), roc_auc
 
