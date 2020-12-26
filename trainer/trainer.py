@@ -3,7 +3,8 @@ import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
-
+from sklearn.metrics import roc_auc_score
+from torch.nn import Softmax
 
 class Trainer(BaseTrainer):
     """
@@ -29,6 +30,7 @@ class Trainer(BaseTrainer):
 
         self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
         self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
+        self.softmax = Softmax(dim=1)
 
     def _train_epoch(self, epoch):
         """
@@ -44,8 +46,6 @@ class Trainer(BaseTrainer):
             attention_mask = batch_data.get("attention_mask").to(self.device)
             target = batch_data.get("targets").to(self.device)
             
-            # data, target = data.to(self.device), target.to(self.device)
-
             self.optimizer.zero_grad()
             output = self.model(input_ids, attention_mask)
             loss = self.criterion(output, target)
@@ -69,8 +69,9 @@ class Trainer(BaseTrainer):
         log = self.train_metrics.result()
 
         if self.do_validation:
-            val_log = self._valid_epoch(epoch)
+            val_log, roc_auc = self._valid_epoch(epoch)
             log.update(**{'val_'+k : v for k, v in val_log.items()})
+            log.update({'ROC AUC':roc_auc})
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
@@ -81,27 +82,37 @@ class Trainer(BaseTrainer):
         Validate after training an epoch
 
         :param epoch: Integer, current training epoch.
-        :return: A log that contains information about validation
+        :return: A log that contains information about validation and ROC AUC score.
         """
         self.model.eval()
         self.valid_metrics.reset()
+        toxic_prob = []
+        target_labels = []
+
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(self.valid_data_loader):
-                data, target = data.to(self.device), target.to(self.device)
+            for batch_idx, batch_data in enumerate(self.valid_data_loader):
+                input_ids = batch_data.get("input_ids").to(self.device)
+                attention_mask = batch_data.get("attention_mask").to(self.device)
+                target = batch_data.get("targets").to(self.device)
 
-                output = self.model(data)
+                output = self.model(input_ids, attention_mask)
                 loss = self.criterion(output, target)
+                pred_prob = self.softmax(output)
+                _, pred_label = torch.max(output, dim=1)
+                toxic_prob = toxic_prob + pred_prob[:,1].tolist()
+                target_labels = target_labels + target.tolist()
 
-                # self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
                 self.valid_metrics.update('loss', loss.item())
                 for met in self.metric_ftns:
                     self.valid_metrics.update(met.__name__, met(output, target))
-                # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
-        # add histogram of model parameters to the tensorboard
-        # for name, p in self.model.named_parameters():
-            # self.writer.add_histogram(name, p, bins='auto')
-        return self.valid_metrics.result()
+
+        try:
+            roc_auc = roc_auc_score(target_labels, toxic_prob)
+        except ValueError:
+            pass
+
+        return self.valid_metrics.result(), roc_auc
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'
