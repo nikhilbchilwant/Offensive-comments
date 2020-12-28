@@ -1,7 +1,8 @@
 import torch
 from abc import abstractmethod
 from numpy import inf
-# from logger import TensorboardWriter
+from collections import OrderedDict
+from transformers import BertModel
 
 class BaseTrainer:
     """
@@ -97,7 +98,7 @@ class BaseTrainer:
             # if epoch % self.save_period == 0:
                 # self._save_checkpoint(epoch, save_best=best)
             if best:
-                self.logger.info("This is the current best model (didn't save).")
+                self.logger.info("This is the current best model (not saved).")
                 # self._save_checkpoint(epoch, save_best=best)
 
     def _save_checkpoint(self, epoch, save_best=False):
@@ -117,14 +118,13 @@ class BaseTrainer:
             'monitor_best': self.mnt_best,
             'config': self.config
         }
-        filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
-        torch.save(state, filename)
         
         if save_best:
+            filename = str(self.checkpoint_dir / 'model_best.pth')
             self.logger.info("Saving checkpoint: {} ...".format(filename))
             best_path = str(self.checkpoint_dir / 'model_best.pth')
             torch.save(state, best_path)
-            self.logger.info("Saving current best: model_best.pth ...")
+            self.logger.info("Saved current best: model_best.pth ...")
 
     def _resume_checkpoint(self, resume_path):
         """
@@ -142,8 +142,9 @@ class BaseTrainer:
         if checkpoint['config']['arch'] != self.config['arch']:
             self.logger.warning("Warning: Architecture configuration given in config file is different from that of "
                                 "checkpoint. This may yield an exception while state_dict is being loaded.")
+              
         self.model.load_state_dict(checkpoint['state_dict'])
-
+        # self.model = BertModel.from_pretrained(new_state_dict)
         # load optimizer state from checkpoint only when optimizer type is not changed.
         if checkpoint['config']['optimizer']['type'] != self.config['optimizer']['type']:
             self.logger.warning("Warning: Optimizer type given in config file is different from that of checkpoint. "

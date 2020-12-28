@@ -8,6 +8,7 @@ import numpy as np
 from torch.utils.data import WeightedRandomSampler
 from dataset.datasets import Toxic_Dataset
 import re
+from transformers import RobertaTokenizer
 
 def get_train_dataloader(train_data, tokenizer, batch_size, num_workers):
   train_labels = train_data['toxic_label_max']

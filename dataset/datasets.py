@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 
 class Toxic_Dataset(Dataset):
-    def __init__(self, ys, Xs, tokenizer, max_len=128):
+    def __init__(self, ys, Xs, tokenizer, max_len=512):
         self.targets = ys
         self.comments = Xs
         self.tokenizer = tokenizer
