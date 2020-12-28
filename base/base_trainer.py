@@ -142,8 +142,11 @@ class BaseTrainer:
         if checkpoint['config']['arch'] != self.config['arch']:
             self.logger.warning("Warning: Architecture configuration given in config file is different from that of "
                                 "checkpoint. This may yield an exception while state_dict is being loaded.")
-              
-        self.model.load_state_dict(checkpoint['state_dict'])
+        
+        new_state_dict = self._remove_module_prefix(checkpoint['state_dict'])
+        # load params
+        self.model.load_state_dict(new_state_dict)
+        # self.model.load_state_dict(checkpoint['state_dict'])
         # self.model = BertModel.from_pretrained(new_state_dict)
         # load optimizer state from checkpoint only when optimizer type is not changed.
         if checkpoint['config']['optimizer']['type'] != self.config['optimizer']['type']:
@@ -153,3 +156,13 @@ class BaseTrainer:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
         self.logger.info("Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch))
+    
+    def _remove_module_prefix(self, old_state_dict):
+        #The model was saved using DataParallel. This poses problem when you load from checkpoint.
+        #https://discuss.pytorch.org/t/solved-keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict/1686/4?u=nikhilbchilwant
+        new_state_dict = OrderedDict()
+        for key, value in old_state_dict.items():
+            name = key[7:] # remove `module.`
+            new_state_dict[name] = value
+            
+        return new_state_dict
