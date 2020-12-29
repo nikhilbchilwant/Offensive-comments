@@ -5,6 +5,8 @@ from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 from sklearn.metrics import roc_auc_score
 from torch.nn import Softmax
+from model import JigsawBERTmodel
+from model.sentiment import SentimentModel
 
 class Trainer(BaseTrainer):
     """
@@ -41,13 +43,31 @@ class Trainer(BaseTrainer):
         """
         self.model.train()
         self.train_metrics.reset()
+        
+        ### temporary code
+        # self.bert = JigsawBERTmodel(["bert-base-german-cased"], 2)
+        # bert_checkpoint = torch.load("/data/users/nchilwant/training_output/models/germ-eval/1228_143410/model_best.pth")
+        # bert_state_dict = super()._remove_module_prefix(bert_checkpoint['state_dict'])
+        # self.bert.load_state_dict(bert_state_dict)
+        # self.bert.to(self.device)
+        # self.sentiment = SentimentModel()
+        # self.sentiment = self.sentiment.to(self.device)
+        ### end temporary code
+
         for (batch_idx, batch_data) in enumerate(self.data_loader):
             input_ids = batch_data.get("input_ids").to(self.device)
             attention_mask = batch_data.get("attention_mask").to(self.device)
             target = batch_data.get("targets").to(self.device)
             
             self.optimizer.zero_grad()
+            
+            # bert_output = self.bert(input_ids, attention_mask)
+            # bert_output = bert_output.to(self.device)
+            # sentiment_output = self.sentiment(input_ids).logits
+            # sentiment_output = sentiment_output.to(self.device)
+            # output = self.model(bert_output, sentiment_output)
             output = self.model(input_ids, attention_mask)
+
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
@@ -95,6 +115,13 @@ class Trainer(BaseTrainer):
                 attention_mask = batch_data.get("attention_mask").to(self.device)
                 target = batch_data.get("targets").to(self.device)
 
+                # bert_output = self.bert(input_ids, attention_mask)
+                # bert_output = bert_output.to(self.device)
+                # sentiment_output = self.sentiment(input_ids).logits
+                # sentiment_output = sentiment_output.to(self.device)
+                # output = self.model(bert_output, sentiment_output)
+
+                # output = self.model(self.bert(input_ids, attention_mask), self.sentiment(input_ids).logits)
                 output = self.model(input_ids, attention_mask)
                 loss = self.criterion(output, target)
                 pred_prob = self.softmax(output)

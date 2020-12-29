@@ -147,7 +147,8 @@ class BaseTrainer:
         # load params
         self.model.load_state_dict(new_state_dict)
         # self.model.load_state_dict(checkpoint['state_dict'])
-        # self.model = BertModel.from_pretrained(new_state_dict)
+        self.model = BertModel.from_pretrained(new_state_dict)
+
         # load optimizer state from checkpoint only when optimizer type is not changed.
         if checkpoint['config']['optimizer']['type'] != self.config['optimizer']['type']:
             self.logger.warning("Warning: Optimizer type given in config file is different from that of checkpoint. "
