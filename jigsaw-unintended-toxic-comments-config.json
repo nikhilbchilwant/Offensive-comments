@@ -13,7 +13,7 @@
         "type": "JigsawUnintendedToxicDataLoader",
         "args":{
             "data_dir": "/data/users/nchilwant/dataset/jigsaw-unintended-bias-train.csv",
-            "batch_size": 256,
+            "batch_size": 8,
             "tokenizer_name": "bert-base-uncased",
             "validation_split": 0.1,
             "num_workers": 4,

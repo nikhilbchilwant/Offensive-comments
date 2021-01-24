@@ -8,9 +8,9 @@ from .sentiment import SentimentModel
 from torch.nn import Softmax
 
 class JigsawBERTmodel(BaseModel):
-    def __init__(self, pretrained_model_names, num_classes):
+    def __init__(self, pretrained_model_name, num_classes):
         super().__init__()
-        bert_model_name = pretrained_model_names[0]
+        bert_model_name = pretrained_model_name
         self.bert = BertModel.from_pretrained(bert_model_name)
         self.fc = nn.Linear(self.bert.config.hidden_size, num_classes)
 
@@ -21,9 +21,9 @@ class JigsawBERTmodel(BaseModel):
         return output
 
 class JigsawRoBERTmodel(BaseModel):
-    def __init__(self, pretrained_model_names, num_classes):
+    def __init__(self, pretrained_model_name, num_classes):
         super().__init__()
-        roberta_model_name = pretrained_model_names[0]
+        roberta_model_name = pretrained_model_name
         self.bert = RobertaModel.from_pretrained(roberta_model_name)
         self.fc = nn.Linear(self.bert.config.hidden_size, num_classes)
 
@@ -35,9 +35,9 @@ class JigsawRoBERTmodel(BaseModel):
 
 # Works for 'bert-base-german-cased' with max_len = 512, 
 class JigsawDropoutBERTmodel(BaseModel):
-    def __init__(self, pretrained_model_names, num_classes):
+    def __init__(self, pretrained_model_name, num_classes):
         super().__init__()
-        self.bert = BertModel.from_pretrained(pretrained_model_names[0])
+        self.bert = BertModel.from_pretrained(pretrained_model_name)
         self.fc = nn.Linear(self.bert.config.hidden_size, num_classes)
         self.drop = nn.Dropout(p=0.5)
 
@@ -49,9 +49,9 @@ class JigsawDropoutBERTmodel(BaseModel):
         return output
 
 class BERTSentimentEnsemble(BaseModel):
-    def __init__(self, pretrained_model_names, num_classes):
+    def __init__(self, pretrained_model_name, num_classes):
         super().__init__()
-        # self.bert = JigsawBERTmodel(pretrained_model_names, num_classes)
+        # self.bert = JigsawBERTmodel(pretrained_model_name, num_classes)
         # self.sentiment = SentimentModel()
         # self.fc1 = nn.Linear(5, num_classes)
         self.fc1 = nn.Linear(5, 4)
