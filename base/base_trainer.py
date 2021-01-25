@@ -54,6 +54,10 @@ class BaseTrainer:
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def _test(self):
+        raise NotImplementedError
+
     def train(self):
         """
         Full training logic
@@ -100,6 +104,16 @@ class BaseTrainer:
             if best:
                 self.logger.info("This is the current best model (not saved).")
                 # self._save_checkpoint(epoch, save_best=best)
+
+    def test(self):
+        result, auc = self._test()
+        test_logs = {}
+        test_logs.update(**{'test_' + k: v for k, v in result.items()})
+        test_logs.update({'test_ROC-AUC' : auc})
+
+        # print logged informations to the screen
+        for key, value in test_logs.items():
+            self.logger.info('    {:15s}: {}'.format(str(key), value))
 
     def _save_checkpoint(self, epoch, save_best=False):
         """

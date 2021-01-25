@@ -13,7 +13,7 @@ class Trainer(BaseTrainer):
     Trainer class
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
-                 data_loader, valid_data_loader=None, lr_scheduler=None, len_epoch=None):
+                 data_loader, valid_data_loader=None, test_data_loader=None, lr_scheduler=None, len_epoch=None):
         super().__init__(model, criterion, metric_ftns, optimizer, config)
         self.config = config
         self.device = device
@@ -26,12 +26,14 @@ class Trainer(BaseTrainer):
             self.data_loader = inf_loop(data_loader)
             self.len_epoch = len_epoch
         self.valid_data_loader = valid_data_loader
+        self.test_data_loader = test_data_loader
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
 
         self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
         self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
+        self.test_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
         self.softmax = Softmax(dim=1)
 
     def _train_epoch(self, epoch):
@@ -115,13 +117,6 @@ class Trainer(BaseTrainer):
                 attention_mask = batch_data.get("attention_mask").to(self.device)
                 target = batch_data.get("targets").to(self.device)
 
-                # bert_output = self.bert(input_ids, attention_mask)
-                # bert_output = bert_output.to(self.device)
-                # sentiment_output = self.sentiment(input_ids).logits
-                # sentiment_output = sentiment_output.to(self.device)
-                # output = self.model(bert_output, sentiment_output)
-
-                # output = self.model(self.bert(input_ids, attention_mask), self.sentiment(input_ids).logits)
                 output = self.model(input_ids, attention_mask)
                 loss = self.criterion(output, target)
                 pred_prob = self.softmax(output)
@@ -140,6 +135,37 @@ class Trainer(BaseTrainer):
             roc_auc = -1
 
         return self.valid_metrics.result(), roc_auc
+
+    def _test(self):
+        self.model.eval()
+        self.test_metrics.reset()
+        toxic_prob = []
+        target_labels = []
+
+        with torch.no_grad():
+            for batch_idx, batch_data in enumerate(self.test_data_loader):
+                input_ids = batch_data.get("input_ids").to(self.device)
+                attention_mask = batch_data.get("attention_mask").to(self.device)
+                target = batch_data.get("targets").to(self.device)
+
+                output = self.model(input_ids, attention_mask)
+                loss = self.criterion(output, target)
+                pred_prob = self.softmax(output)
+                _, pred_label = torch.max(output, dim=1)
+                toxic_prob = toxic_prob + pred_prob[:,1].tolist()
+                target_labels = target_labels + target.tolist()
+
+                self.test_metrics.update('loss', loss.item())
+                for met in self.metric_ftns:
+                    self.test_metrics.update(met.__name__, met(output, target))
+
+
+        try:
+            roc_auc = roc_auc_score(target_labels, toxic_prob)
+        except ValueError:
+            roc_auc = -1
+
+        return self.test_metrics.result(), roc_auc
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'

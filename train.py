@@ -9,7 +9,7 @@ import model as module_arch
 from parse_config import ConfigParser
 from trainer import Trainer
 from utils import prepare_device
-
+from sklearn.model_selection import KFold
 # fix random seeds for reproducibility
 SEED = 123
 torch.manual_seed(SEED)
@@ -20,13 +20,11 @@ np.random.seed(SEED)
 def main(config):
     logger = config.get_logger('train')
     # setup data_loader instances
-    data_loader = config.init_obj('data_loader', module_data)
-    train_data_loader = data_loader.get_train_dataloader()
-    valid_data_loader = data_loader.get_val_dataloader()
+    data_loader_factory = config.init_obj('data_loader', module_data)
 
     # build model architecture, then print to console
     model = config.init_obj('arch', module_arch)
-    logger.info(model)
+    # logger.info(model)
 
     # prepare for (multi-device) GPU training
     device, device_ids = prepare_device(config['n_gpu'])
@@ -43,14 +41,21 @@ def main(config):
     optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
     lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
 
-    trainer = Trainer(model, criterion, metrics, optimizer,
-                      config=config,
-                      device=device,
-                      data_loader=train_data_loader,
-                      valid_data_loader=valid_data_loader,
-                      lr_scheduler=lr_scheduler)
-
-    trainer.train()
+    kf = KFold(n_splits=config['k-folds'])
+    k = 1
+    for train_indices, val_indices in kf.split(data_loader_factory.get_data()):
+        train_data_loader, val_data_loader, test_data_loader = data_loader_factory.get_dataloaders(train_indices, val_indices)
+        trainer = Trainer(model, criterion, metrics, optimizer,
+                          config=config,
+                          device=device,
+                          data_loader=train_data_loader,
+                          valid_data_loader=val_data_loader,
+                          test_data_loader=test_data_loader,
+                          lr_scheduler=lr_scheduler)
+        logger.info(f'Training for k-fold (k= {k})')
+        trainer.train()
+        trainer.test()
+        k = k + 1
 
 
 if __name__ == '__main__':
