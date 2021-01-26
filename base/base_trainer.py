@@ -63,6 +63,8 @@ class BaseTrainer:
         Full training logic
         """
         not_improved_count = 0
+        best_result_log = None
+
         for epoch in range(self.start_epoch, self.epochs + 1):
             result = self._train_epoch(epoch)
 
@@ -89,6 +91,7 @@ class BaseTrainer:
 
                 if improved:
                     self.mnt_best = log[self.mnt_metric]
+                    best_result_log = log
                     not_improved_count = 0
                     best = True
                 else:
@@ -97,13 +100,16 @@ class BaseTrainer:
                 if not_improved_count > self.early_stop:
                     self.logger.info("Validation performance didn\'t improve for {} epochs. "
                                      "Training stops.".format(self.early_stop))
-                    break
+                    return best_result_log
+                    # break
+
 
             # if epoch % self.save_period == 0:
                 # self._save_checkpoint(epoch, save_best=best)
             if best:
                 self.logger.info("This is the current best model (not saved).")
                 # self._save_checkpoint(epoch, save_best=best)
+        return best_result_log
 
     def test(self):
         result, auc = self._test()

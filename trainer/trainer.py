@@ -7,6 +7,7 @@ from sklearn.metrics import roc_auc_score
 from torch.nn import Softmax
 from model import JigsawBERTmodel
 from model.sentiment import SentimentModel
+from ray import tune
 
 class Trainer(BaseTrainer):
     """
@@ -45,16 +46,6 @@ class Trainer(BaseTrainer):
         """
         self.model.train()
         self.train_metrics.reset()
-        
-        ### temporary code
-        # self.bert = JigsawBERTmodel(["bert-base-german-cased"], 2)
-        # bert_checkpoint = torch.load("/data/users/nchilwant/training_output/models/germ-eval/1228_143410/model_best.pth")
-        # bert_state_dict = super()._remove_module_prefix(bert_checkpoint['state_dict'])
-        # self.bert.load_state_dict(bert_state_dict)
-        # self.bert.to(self.device)
-        # self.sentiment = SentimentModel()
-        # self.sentiment = self.sentiment.to(self.device)
-        ### end temporary code
 
         for (batch_idx, batch_data) in enumerate(self.data_loader):
             input_ids = batch_data.get("input_ids").to(self.device)
@@ -62,19 +53,13 @@ class Trainer(BaseTrainer):
             target = batch_data.get("targets").to(self.device)
             
             self.optimizer.zero_grad()
-            
-            # bert_output = self.bert(input_ids, attention_mask)
-            # bert_output = bert_output.to(self.device)
-            # sentiment_output = self.sentiment(input_ids).logits
-            # sentiment_output = sentiment_output.to(self.device)
-            # output = self.model(bert_output, sentiment_output)
+
             output = self.model(input_ids, attention_mask)
 
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
 
-            # self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())
             for met in self.metric_ftns:
                 self.train_metrics.update(met.__name__, met(output, target))
@@ -84,7 +69,6 @@ class Trainer(BaseTrainer):
                     epoch,
                     self._progress(batch_idx),
                     loss.item()))
-                # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
             if batch_idx == self.len_epoch:
                 break
@@ -93,7 +77,7 @@ class Trainer(BaseTrainer):
         if self.do_validation:
             val_log, roc_auc = self._valid_epoch(epoch)
             log.update(**{'val_'+k : v for k, v in val_log.items()})
-            log.update({'ROC AUC':roc_auc})
+            log.update({'roc_auc':roc_auc})
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
@@ -110,6 +94,10 @@ class Trainer(BaseTrainer):
         self.valid_metrics.reset()
         toxic_prob = []
         target_labels = []
+        val_loss = 0.0
+        val_steps = 0
+        total = 0
+        correct = 0
 
         with torch.no_grad():
             for batch_idx, batch_data in enumerate(self.valid_data_loader):
@@ -125,9 +113,13 @@ class Trainer(BaseTrainer):
                 target_labels = target_labels + target.tolist()
 
                 self.valid_metrics.update('loss', loss.item())
+                val_loss += loss.cpu().numpy()
+                val_steps = val_steps + 1
+                correct += (pred_label == target).sum().item()
+                total += pred_label.size(0)
+
                 for met in self.metric_ftns:
                     self.valid_metrics.update(met.__name__, met(output, target))
-
 
         try:
             roc_auc = roc_auc_score(target_labels, toxic_prob)
