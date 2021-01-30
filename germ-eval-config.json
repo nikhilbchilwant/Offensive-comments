@@ -2,7 +2,7 @@
     "name": "germ-eval",
     "n_gpu": 1,
     "k-folds": 10,
-
+    "ray_local_mode": "False",
     "arch": {
         "type": "JigsawBERTmodel",
         "args": {
@@ -21,13 +21,6 @@
             "data_red_factor": 100
         }
     },
-    "optimizer": {
-        "type": "AdamW",
-        "args":{
-            "lr": 0.00002,
-            "weight_decay": 0.001
-        }
-    },
     "loss": "cross_entropy_loss",
     "metrics": [
         "accuracy"
@@ -40,15 +33,12 @@
         }
     },
     "trainer": {
-        "epochs": 1,
-
+        "epochs": 10,
         "save_dir": "/data/users/nchilwant/training_output",
         "save_period": 20,
         "verbosity": 2,
 
         "monitor": "min val_loss",
-        "early_stop": 2,
-
-        "tensorboard": false
+        "early_stop": 2
     }
 }

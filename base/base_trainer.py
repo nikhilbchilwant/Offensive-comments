@@ -3,12 +3,13 @@ from abc import abstractmethod
 from numpy import inf
 from collections import OrderedDict
 from transformers import BertModel
+from ray import tune
 
 class BaseTrainer:
     """
     Base class for all trainers
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config):
+    def __init__(self, model, criterion, metric_ftns, optimizer, config, save_checkpoint):
         self.config = config
         self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
 
@@ -19,7 +20,8 @@ class BaseTrainer:
 
         cfg_trainer = config['trainer']
         self.epochs = cfg_trainer['epochs']
-        self.save_period = cfg_trainer['save_period']
+        # self.save_period = cfg_trainer['save_period']
+        self.save_checkpoint = save_checkpoint
         self.monitor = cfg_trainer.get('monitor', 'off')
 
         # configuration to monitor model performance and save best
@@ -101,27 +103,24 @@ class BaseTrainer:
                     self.logger.info("Validation performance didn\'t improve for {} epochs. "
                                      "Training stops.".format(self.early_stop))
                     return best_result_log
-                    # break
 
-
-            # if epoch % self.save_period == 0:
-                # self._save_checkpoint(epoch, save_best=best)
-            if best:
+            elif best:
                 self.logger.info("This is the current best model (not saved).")
-                # self._save_checkpoint(epoch, save_best=best)
+                if self.save_checkpoint:
+                    self._save_checkpoint(epoch)
+
         return best_result_log
 
     def test(self):
-        result, auc = self._test()
+        result = self._test()
         test_logs = {}
         test_logs.update(**{'test_' + k: v for k, v in result.items()})
-        test_logs.update({'test_ROC-AUC' : auc})
 
         # print logged informations to the screen
         for key, value in test_logs.items():
             self.logger.info('    {:15s}: {}'.format(str(key), value))
 
-    def _save_checkpoint(self, epoch, save_best=False):
+    def _save_checkpoint(self, epoch):
         """
         Saving checkpoints
 
@@ -138,13 +137,12 @@ class BaseTrainer:
             'monitor_best': self.mnt_best,
             'config': self.config
         }
-        
-        if save_best:
-            filename = str(self.checkpoint_dir / 'model_best.pth')
-            self.logger.info("Saving checkpoint: {} ...".format(filename))
-            best_path = str(self.checkpoint_dir / 'model_best.pth')
-            torch.save(state, best_path)
-            self.logger.info("Saved current best: model_best.pth ...")
+
+        filename = str(self.checkpoint_dir / 'model_best.pth')
+        self.logger.info("Saving checkpoint: {} ...".format(filename))
+        best_path = str(self.checkpoint_dir / 'model_best.pth')
+        torch.save(state, best_path)
+        self.logger.info("Saved current best: model_best.pth ...")
 
     def _resume_checkpoint(self, resume_path):
         """
@@ -162,7 +160,7 @@ class BaseTrainer:
         if checkpoint['config']['arch'] != self.config['arch']:
             self.logger.warning("Warning: Architecture configuration given in config file is different from that of "
                                 "checkpoint. This may yield an exception while state_dict is being loaded.")
-        
+
         new_state_dict = self._remove_module_prefix(checkpoint['state_dict'])
         # load params
         self.model.load_state_dict(new_state_dict)
@@ -177,7 +175,7 @@ class BaseTrainer:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
         self.logger.info("Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch))
-    
+
     def _remove_module_prefix(self, old_state_dict):
         #The model was saved using DataParallel. This poses problem when you load from checkpoint.
         #https://discuss.pytorch.org/t/solved-keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict/1686/4?u=nikhilbchilwant
@@ -185,5 +183,5 @@ class BaseTrainer:
         for key, value in old_state_dict.items():
             name = key[7:] # remove `module.`
             new_state_dict[name] = value
-            
+
         return new_state_dict

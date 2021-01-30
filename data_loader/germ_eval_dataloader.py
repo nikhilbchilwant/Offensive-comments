@@ -5,9 +5,8 @@ import pandas as pd
 from transformers import BertTokenizer
 
 from base import BaseDataLoader
-from dataloader_util import get_reduced_data, get_val_dataloader, \
-    get_train_dataloader, clean_text
-
+from . import get_reduced_data, get_dataloader, \
+    get_balanced_dataloader, clean_text
 
 class GermEvalDataLoader(BaseDataLoader):
     def __init__(self, data_dir, test_dir, batch_size, tokenizer_name,
@@ -26,13 +25,17 @@ class GermEvalDataLoader(BaseDataLoader):
         self.eternio_test = pd.read_csv(test_dir)
         self.eternio_test = self._format_eternio(self.eternio_test)
 
-    def get_dataloaders(self, train_indices, val_indices):
-        return get_train_dataloader(self.germ_eval.take(train_indices), self.tokenizer,
-                                    self.batch_size, self.num_workers), \
-               get_val_dataloader(self.germ_eval.take(val_indices), self.tokenizer,
-                             self.batch_size, self.num_workers), \
-               get_val_dataloader(self.eternio_test, self.tokenizer,
-                                  self.batch_size, self.num_workers)
+    def get_train_dataloader(self, train_indices):
+        return get_balanced_dataloader(self.germ_eval.take(train_indices),
+                                       self.tokenizer, self.batch_size, self.num_workers)
+
+    def get_val_dataloader(self, val_indices):
+        return get_dataloader(self.germ_eval.take(val_indices), self.tokenizer,
+                              self.batch_size, self.num_workers)
+
+    def get_test_dataloader(self):
+        return get_dataloader(self.eternio_test, self.tokenizer,
+                              self.batch_size, self.num_workers)
 
     def get_data(self):
         return self.germ_eval

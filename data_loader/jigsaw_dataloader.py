@@ -3,8 +3,8 @@ import pandas as pd
 from transformers import BertTokenizer
 
 from base import BaseDataLoader
-from dataloader_util import get_reduced_data, get_train_dataloader, \
-    get_val_dataloader
+from . import get_reduced_data, get_balanced_dataloader, \
+    get_dataloader
 
 
 class JigsawDataLoader(BaseDataLoader):
@@ -28,9 +28,9 @@ class JigsawDataLoader(BaseDataLoader):
             [int((1.0 - validation_split) * n_samples)])
 
     def get_train_dataloader(self):
-        return get_train_dataloader(self.train_data, self.tokenizer,
-                                    self.batch_size, self.num_workers)
+        return get_balanced_dataloader(self.train_data, self.tokenizer,
+                                       self.batch_size, self.num_workers)
 
     def get_val_dataloader(self):
-        return get_val_dataloader(self.validate_data, self.tokenizer,
-                                  self.batch_size, self.num_workers)
+        return get_dataloader(self.validate_data, self.tokenizer,
+                              self.batch_size, self.num_workers)
