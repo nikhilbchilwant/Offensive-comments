@@ -60,5 +60,5 @@ def get_reduced_data(data_series, data_reduction_fac):
 
 def clean_text(text):
     return ' '.join(
-            re.sub("(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)", " ",
+            re.sub("(@[A-Za-z0-9]+)|([^0-9A-Za-zäöüÄÖÜß \t])|(\w+:\/\/\S+)", " ",
                text).split())
