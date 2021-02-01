@@ -8,8 +8,7 @@ from torch.nn import Softmax
 from model import JigsawBERTmodel
 from model.sentiment import SentimentModel
 from ray import tune
-from sklearn.metrics import f1_score
-from sklearn.metrics import classification_report
+from sklearn.metrics import f1_score, cohen_kappa_score, classification_report
 
 class Trainer(BaseTrainer):
     """
@@ -38,7 +37,7 @@ class Trainer(BaseTrainer):
         self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
         self.test_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
         self.softmax = Softmax(dim=1)
-        self.target_labels = ["non-offensive", "offensive"]
+        self.target_labels = ["Germ-Eval", "Eternio"]
 
     def _train_epoch(self, epoch):
         """
@@ -127,14 +126,23 @@ class Trainer(BaseTrainer):
 
         try:
             roc_auc = roc_auc_score(target_labels, toxic_prob)
-            f1 = f1_score(np.asarray(target_labels), np.asarray(predicted_labels))
         except ValueError:
             roc_auc = -1
-            f1 = -1
+
+        try:
+            f1 = f1_score(np.asarray(target_labels), np.asarray(predicted_labels))
+        except ValueError:
+            f1 = -2
+
+        try:
+            kappa = cohen_kappa_score(np.asarray(target_labels), np.asarray(predicted_labels))
+        except ValueError:
+            kappa = -2
 
         metric_logs = self.valid_metrics.result()
         metric_logs.update({'roc_auc':roc_auc})
         metric_logs.update({'f1':f1})
+        metric_logs.update({'kappa':kappa})
         return metric_logs
 
     def _test(self):
@@ -162,18 +170,30 @@ class Trainer(BaseTrainer):
                 for met in self.metric_ftns:
                     self.test_metrics.update(met.__name__, met(output, target))
 
-
         try:
             roc_auc = roc_auc_score(target_labels, toxic_prob)
+        except ValueError:
+            roc_auc = -2
+
+        try:
             f1 = f1_score(np.asarray(target_labels), np.asarray(predicted_labels))
+        except ValueError:
+            f1 = -2
+
+        try:
+            kappa = cohen_kappa_score(np.asarray(target_labels), np.asarray(predicted_labels))
+        except ValueError:
+            kappa = -2
+
+        try:
             class_report = classification_report(target_labels, predicted_labels, target_names=self.target_labels)
         except ValueError:
-            roc_auc = -1
-            f1 = -1
+            class_report = ''
 
         metric_logs = self.test_metrics.result()
         metric_logs.update({'roc_auc':roc_auc})
         metric_logs.update({'f1':f1})
+        metric_logs.update({'kappa':kappa})
         metric_logs.update({'classification_report':'\n'+class_report})
         return metric_logs
 

@@ -15,15 +15,21 @@ class GermEvalDataLoader(BaseDataLoader):
         self.num_workers = num_workers
         self.batch_size = batch_size
 
-        self.germ_eval = pd.read_table(data_dir)
+        self.germ_eval = pd.read_table(data_dir,  encoding='utf-8')
         self.germ_eval = get_reduced_data(self.germ_eval, data_red_factor)
-        n_samples = len(self.germ_eval)
+        # n_samples = len(self.germ_eval)
 
         self.tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
         self.germ_eval = self._format_germ_eval(self.germ_eval)
+        # self.germ_eval.to_csv(path_or_buf='/data/users/nchilwant/training_output/test-pandas.csv',
+        #                       columns=['comment_text','toxic_label_max','dataset_label'],
+        #                       header=True, index=False, sep='\t')
 
-        self.eternio_test = pd.read_csv(test_dir)
+        self.eternio_test = pd.read_csv(test_dir, encoding='utf-8')
         self.eternio_test = self._format_eternio(self.eternio_test)
+        # self.eternio_test.to_csv(path_or_buf='/data/users/nchilwant/training_output/test-pandas.csv',
+        #                       columns=['comment_text','toxic_label_max','dataset_label'],
+        #                       mode='a', header=False, index=False, sep='\t')
 
     def get_train_dataloader(self, train_indices):
         return get_balanced_dataloader(self.germ_eval.take(train_indices),
@@ -49,11 +55,15 @@ class GermEvalDataLoader(BaseDataLoader):
             {'OFFENSE': 1, 'INSULT': 1, 'ABUSE': 1, 'PROFANITY': 1, 'OTHER': 0})
         data_series['toxic_label_max'] = data_series[['label_1', 'label_2']].apply(
             lambda x: np.max(x), axis=1)
+        data_series['dataset_label'] = np.zeros(len(data_series['comment_text']),
+                                          dtype=np.int8)
         return data_series
 
     def _format_eternio(self, data_series):
         data_series.columns = ['id' , 'comment_text', 'toxic_label_max']
         data_series['comment_text'] = data_series['comment_text'].apply(
             lambda x: clean_text(x))
-        data_series['toxic_label_max'] = data_series['toxic_label_max']
+        # data_series['toxic_label_max'] = data_series['toxic_label_max']
+        data_series['dataset_label'] = np.ones(len(data_series['comment_text']),
+                                          dtype=np.int8)
         return data_series

@@ -19,27 +19,28 @@ from trainer import Trainer
 from utils import prepare_device
 import ray
 import pprint
+import math
 
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = '2,3'
+import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = '1,2,3'
 
 # fix random seeds for reproducibility
-SEED = 79
+SEED = 7
 torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
-def main(project_config, num_samples=20, max_num_epochs=1, gpus_per_trial=0):
+def main(project_config, num_samples=1, max_num_epochs=1, gpus_per_trial=0):
     ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #enable for debugging
 
     tune_config = {
-        "lr": tune.loguniform(1e-6, 1e-2),
+        "lr": tune.loguniform(1e-4, 1e-2),
         "momentum": tune.uniform(0.01, 0.99)
     }
 
     reporter = CLIReporter(
-        metric_columns=["loss", "accuracy", "roc_auc", "f1", "epoch", "training_iteration"])
+        metric_columns=['loss', 'accuracy', 'roc_auc', 'f1', 'kappa' ,'epoch', 'training_iteration'])
 
     scheduler = ASHAScheduler(
         metric="loss",
@@ -56,18 +57,16 @@ def main(project_config, num_samples=20, max_num_epochs=1, gpus_per_trial=0):
         scheduler=scheduler,
         progress_reporter=reporter,
         local_dir='/data/users/nchilwant/training_output/ray_tune',
-        name="GermEval",
-        # log_to_file=("stdout.log", "stderr.log"),
+        name="domain-classifier",
     )
 
-    best_trial = result.get_best_trial("loss", "min", "last")
+    best_trial = result.get_best_trial('f1', 'max', 'last')
     print("Best trial config: {}".format(best_trial.config))
     print("Best trial final validation loss: {}".format(
         best_trial.last_result["loss"]))
     print("Best trial final validation accuracy: {}".format(
         best_trial.last_result["accuracy"]))
     return best_trial
-
 
 def kfold_train(tune_config, project_config=None):
     logger = project_config.get_logger('train')
@@ -93,13 +92,13 @@ def kfold_train(tune_config, project_config=None):
     fold_count = project_config['k-folds']
     kf = StratifiedKFold(n_splits=fold_count, shuffle=True)
     total_kfold_performance = {}
-    tune_metrics = ['val_loss', 'val_accuracy', 'val_roc_auc', 'val_f1', 'epoch']
+    tune_metrics = ['val_loss', 'val_accuracy', 'val_roc_auc', 'val_f1', 'val_kappa', 'epoch']
     for key in tune_metrics:
         total_kfold_performance[key] = 0.0
     k = 1
     expt_data = data_loader_factory.get_data().to_numpy()
 
-    for train_indices, val_indices in kf.split(np.zeros(len(expt_data[:,0])), expt_data[:,3].tolist()):
+    for train_indices, val_indices in kf.split(np.zeros(len(expt_data[:,0])), expt_data[:,2].tolist()):
         train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
         val_data_loader = data_loader_factory.get_val_dataloader(val_indices)
 
@@ -123,11 +122,11 @@ def kfold_train(tune_config, project_config=None):
                 accuracy=total_kfold_performance['val_accuracy']/fold_count,
                 roc_auc=total_kfold_performance['val_roc_auc']/fold_count,
                 f1=total_kfold_performance['val_f1']/fold_count,
-                epoch=best_epoch_log['epoch'])
+                kappa=total_kfold_performance['val_kappa']/fold_count,
+                epoch=math.ceil(total_kfold_performance['epoch']/fold_count))
 
 def train_test(project_config, best_trial_config={"lr":0.0014903967764602632,
-                                                  "momentum":0.4953116658860468,
-                                                  "epoch":3}):
+                                                  "momentum":0.4953116658860468}):
     logger = project_config.get_logger('train')
     # setup data_loader instances
     data_loader_factory = project_config.init_obj('data_loader', module_data)
@@ -144,8 +143,6 @@ def train_test(project_config, best_trial_config={"lr":0.0014903967764602632,
     metrics = [getattr(module_metric, met) for met in project_config['metrics']]
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-
-    project_config['trainer']['epochs'] = best_trial_config["epoch"]
 
     optimizer = optim.SGD(trainable_params, lr=best_trial_config["lr"],
                           momentum=best_trial_config["momentum"])
@@ -188,6 +185,7 @@ if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter(indent=4, depth=6, sort_dicts=False)
     pp.pprint(f'The project conifguration is :{dict(project_config.config.items())}')
-    # best_trial = main(project_config)
-    # train_test(project_config, best_trial.config)
-    train_test(project_config)
+    best_trial = main(project_config)
+    project_config['trainer']['epochs'] = best_trial.last_result['epoch']
+    train_test(project_config, best_trial.config)
+    # train_test(project_config)

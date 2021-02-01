@@ -9,7 +9,7 @@ from dataset.datasets import Toxic_Dataset
 
 
 def get_balanced_dataloader(train_data, tokenizer, batch_size, num_workers):
-    train_labels = train_data['toxic_label_max']
+    train_labels = train_data['dataset_label']
     train_comments = train_data['comment_text']
     train_labels, train_comments = train_labels.to_list(), train_comments.to_list()
 
@@ -38,7 +38,7 @@ def get_balanced_dataloader(train_data, tokenizer, batch_size, num_workers):
 
 
 def get_dataloader(validate_data, tokenizer, batch_size, num_workers):
-    val_labels = validate_data['toxic_label_max']
+    val_labels = validate_data['dataset_label']
     val_comments = validate_data['comment_text']
     val_labels, val_comments = val_labels.to_list(), val_comments.to_list()
 
