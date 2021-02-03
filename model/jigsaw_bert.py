@@ -12,7 +12,7 @@ class JigsawBERTmodel(BaseModel):
         self.fc = nn.Linear(self.bert.config.hidden_size, num_classes)
 
     def forward(self, input_ids, attention_mask):
-        output = self.bert(input_ids, attention_mask)
-        output = output[0][:, 0]
+        latent = self.bert(input_ids, attention_mask)
+        output = latent[0][:, 0]
         output = self.fc(output)
-        return output
+        return output, latent.last_hidden_state

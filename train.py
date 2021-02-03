@@ -4,6 +4,7 @@ from functools import partial
 
 import numpy as np
 import torch
+from torch import nn
 import torch.optim as optim
 from ray import tune
 from ray.tune import CLIReporter
@@ -12,7 +13,7 @@ from sklearn.model_selection import StratifiedKFold
 
 import data_loader as module_data
 import model as module_arch
-import model.loss as module_loss
+import model.domain_loss as module_loss
 import model.metric as module_metric
 from parse_config import ConfigParser
 from trainer import Trainer
@@ -30,7 +31,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
-def main(project_config, num_samples=20, max_num_epochs=1, gpus_per_trial=0):
+def main(project_config, num_samples=10):
     ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #enable for debugging
 
     tune_config = {
@@ -56,7 +57,7 @@ def main(project_config, num_samples=20, max_num_epochs=1, gpus_per_trial=0):
         scheduler=scheduler,
         progress_reporter=reporter,
         local_dir='/data/users/nchilwant/training_output/ray_tune',
-        name="GermEval",
+        name="domain-adaptation",
         # log_to_file=("stdout.log", "stderr.log"),
     )
 
@@ -82,7 +83,8 @@ def kfold_train(tune_config, project_config=None):
     if len(device_ids) > 1:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
     # get function handles of loss and metrics
-    criterion = getattr(module_loss, project_config['loss'])
+    criterion = project_config.init_obj('loss', module_loss)
+    criterion.to(device)
     metrics = [getattr(module_metric, met) for met in project_config['metrics']]
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
@@ -102,6 +104,7 @@ def kfold_train(tune_config, project_config=None):
     for train_indices, val_indices in kf.split(np.zeros(len(expt_data[:,0])), expt_data[:,3].tolist()):
         train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
         val_data_loader = data_loader_factory.get_val_dataloader(val_indices)
+        target_data_loader = data_loader_factory.get_target_dataloader()
 
         trainer = Trainer(model, criterion, metrics, optimizer,
                           config=project_config,
@@ -109,6 +112,7 @@ def kfold_train(tune_config, project_config=None):
                           data_loader=train_data_loader,
                           valid_data_loader=val_data_loader,
                           test_data_loader=None,
+                          target_data_loader=target_data_loader,
                           lr_scheduler=lr_scheduler)
         logger.info(f'Training for k-fold (k={k})')
         best_epoch_log = trainer.train()
@@ -126,8 +130,7 @@ def kfold_train(tune_config, project_config=None):
                 epoch=best_epoch_log['epoch'])
 
 def train_test(project_config, best_trial_config={"lr":0.0014903967764602632,
-                                                  "momentum":0.4953116658860468,
-                                                  "epoch":3}):
+                                                  "momentum":0.4953116658860468}):
     logger = project_config.get_logger('train')
     # setup data_loader instances
     data_loader_factory = project_config.init_obj('data_loader', module_data)
@@ -140,12 +143,12 @@ def train_test(project_config, best_trial_config={"lr":0.0014903967764602632,
     if len(device_ids) > 1:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
     # get function handles of loss and metrics
-    criterion = getattr(module_loss, project_config['loss'])
+    criterion = project_config.init_obj('loss', module_loss)
+    criterion.to(device)
+
     metrics = [getattr(module_metric, met) for met in project_config['metrics']]
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-
-    project_config['trainer']['epochs'] = best_trial_config["epoch"]
 
     optimizer = optim.SGD(trainable_params, lr=best_trial_config["lr"],
                           momentum=best_trial_config["momentum"])
@@ -156,12 +159,14 @@ def train_test(project_config, best_trial_config={"lr":0.0014903967764602632,
     train_indices = np.arange(len(data_loader_factory.get_data()))
     train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
     test_data_loader = data_loader_factory.get_test_dataloader()
+    target_data_loader = data_loader_factory.get_target_dataloader()
     trainer = Trainer(model, criterion, metrics, optimizer,
                       config=project_config,
                       device=device,
                       data_loader=train_data_loader,
                       valid_data_loader=None,
                       test_data_loader=test_data_loader,
+                      target_data_loader=target_data_loader,
                       lr_scheduler=lr_scheduler,
                       # save_checkpoint=True
                       )
@@ -188,6 +193,7 @@ if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter(indent=4, depth=6, sort_dicts=False)
     pp.pprint(f'The project conifguration is :{dict(project_config.config.items())}')
-    # best_trial = main(project_config)
-    # train_test(project_config, best_trial.config)
-    train_test(project_config)
+    best_trial = main(project_config)
+    project_config['trainer']['epochs'] = best_trial.last_result['epoch']
+    train_test(project_config, best_trial.config)
+    # train_test(project_config)

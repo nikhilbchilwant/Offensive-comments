@@ -9,7 +9,7 @@ from . import get_reduced_data, get_dataloader, \
     get_balanced_dataloader, clean_text
 
 class GermEvalDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, test_dir, batch_size, tokenizer_name,
+    def __init__(self, data_dir, test_dir, target_domain_dir, batch_size, tokenizer_name,
                  num_workers=1, data_red_factor=1):
         self.data_dir = data_dir
         self.num_workers = num_workers
@@ -25,6 +25,9 @@ class GermEvalDataLoader(BaseDataLoader):
         self.eternio_test = pd.read_csv(test_dir)
         self.eternio_test = self._format_eternio(self.eternio_test)
 
+        self.eternio_target = pd.read_csv(target_domain_dir)
+        self.eternio_target = self._format_eternio(self.eternio_test)
+
     def get_train_dataloader(self, train_indices):
         return get_balanced_dataloader(self.germ_eval.take(train_indices),
                                        self.tokenizer, self.batch_size, self.num_workers)
@@ -36,6 +39,10 @@ class GermEvalDataLoader(BaseDataLoader):
     def get_test_dataloader(self):
         return get_dataloader(self.eternio_test, self.tokenizer,
                               self.batch_size, self.num_workers)
+
+    def get_target_dataloader(self):
+        return get_dataloader(self.eternio_target, self.tokenizer,
+                            self.batch_size, self.num_workers)
 
     def get_data(self):
         return self.germ_eval

@@ -5,7 +5,7 @@
 #$ -S /bin/bash  
 # the working directory where the commands below will
 # be executed: (make sure to specify)
-#$ -wd /nethome/nchilwant/projects/offensive-comments
+#$ -wd /nethome/nchilwant/offensive-comments
 #
 # logging files will go here: (make sure to specify)
 #$ -e /data/users/nchilwant/log/ -o /data/users/nchilwant/log/

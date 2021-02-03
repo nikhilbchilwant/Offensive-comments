@@ -16,7 +16,7 @@ class Trainer(BaseTrainer):
     Trainer class
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
-                 data_loader, valid_data_loader=None, test_data_loader=None, lr_scheduler=None, len_epoch=None, save_checkpoint=False):
+                 data_loader, valid_data_loader=None, test_data_loader=None, target_data_loader=None, lr_scheduler=None, len_epoch=None, save_checkpoint=False):
         super().__init__(model, criterion, metric_ftns, optimizer, config, save_checkpoint)
         self.config = config
         self.device = device
@@ -30,6 +30,7 @@ class Trainer(BaseTrainer):
             self.len_epoch = len_epoch
         self.valid_data_loader = valid_data_loader
         self.test_data_loader = test_data_loader
+        self.target_data_loader = target_data_loader
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
@@ -47,6 +48,8 @@ class Trainer(BaseTrainer):
         :param epoch: Integer, current training epoch.
         :return: A log that contains average loss and metric in this epoch.
         """
+        self.target_latent = self.get_latent_domain(self.target_data_loader).to(self.device)
+
         self.model.train()
         self.train_metrics.reset()
 
@@ -57,9 +60,9 @@ class Trainer(BaseTrainer):
 
             self.optimizer.zero_grad()
 
-            output = self.model(input_ids, attention_mask)
+            output, train_latent = self.model(input_ids, attention_mask)
 
-            loss = self.criterion(output, target)
+            loss = self.criterion(output, target, train_latent, self.target_latent)
             loss.backward()
             self.optimizer.step()
 
@@ -108,8 +111,8 @@ class Trainer(BaseTrainer):
                 attention_mask = batch_data.get("attention_mask").to(self.device)
                 target = batch_data.get("targets").to(self.device)
 
-                output = self.model(input_ids, attention_mask)
-                loss = self.criterion(output, target)
+                output, valid_latent = self.model(input_ids, attention_mask)
+                loss = self.criterion(output, target, valid_latent, self.target_latent)
                 pred_prob = self.softmax(output)
                 _, pred_label = torch.max(output, dim=1)
                 toxic_prob = toxic_prob + pred_prob[:,1].tolist()
@@ -150,8 +153,8 @@ class Trainer(BaseTrainer):
                 attention_mask = batch_data.get("attention_mask").to(self.device)
                 target = batch_data.get("targets").to(self.device)
 
-                output = self.model(input_ids, attention_mask)
-                loss = self.criterion(output, target)
+                output, test_latent = self.model(input_ids, attention_mask)
+                loss = self.criterion(output, target, test_latent, self.target_latent)
                 pred_prob = self.softmax(output)
                 _, pred_label = torch.max(output, dim=1)
                 toxic_prob = toxic_prob + pred_prob[:,1].tolist()
@@ -186,3 +189,24 @@ class Trainer(BaseTrainer):
             current = batch_idx
             total = self.len_epoch
         return base.format(current, total, 100.0 * current / total)
+
+    def get_latent_domain(self, domain_data_loader):
+        self.model.eval()
+        latent_domain = None
+
+        for (batch_idx, batch_data) in enumerate(domain_data_loader):
+            input_ids = batch_data.get("input_ids").to(self.device)
+            attention_mask = batch_data.get("attention_mask").to(self.device)
+            # target = batch_data.get("targets").to(self.device)
+
+            _, latent = self.model(input_ids, attention_mask)
+            
+            latent = latent.cpu()
+            if latent_domain is None:
+                latent_domain = latent.data
+            elif latent_domain is not None:
+                latent_domain = torch.cat((latent_domain, latent.data), 0)
+            
+
+        return latent_domain
+        
