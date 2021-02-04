@@ -10,17 +10,16 @@ from . import get_reduced_data, get_dataloader, \
 
 class GermEvalDataLoader(BaseDataLoader):
     def __init__(self, data_dir, test_dir, target_domain_dir, batch_size, tokenizer_name,
-                 num_workers=1, data_red_factor=1):
+                 num_workers=1, multi_factor=1.0):
         self.data_dir = data_dir
         self.num_workers = num_workers
         self.batch_size = batch_size
 
-        self.germ_eval = pd.read_table(data_dir)
-        self.germ_eval = get_reduced_data(self.germ_eval, data_red_factor)
-        n_samples = len(self.germ_eval)
+        self.germ_eval = pd.read_csv(data_dir)
+        self.germ_eval = get_reduced_data(self.germ_eval, multi_factor)
 
         self.tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
-        self.germ_eval = self._format_germ_eval(self.germ_eval)
+        # self.germ_eval = self._format_germ_eval(self.germ_eval)
 
         self.eternio_test = pd.read_csv(test_dir)
         self.eternio_test = self._format_eternio(self.eternio_test)

@@ -56,8 +56,11 @@ def get_dataloader(validate_data, tokenizer, batch_size, num_workers):
     return DataLoader(**val_init_kwargs)
 
 
-def get_reduced_data(data_series, data_reduction_fac):
-    return data_series[0:(int)(len(data_series) / data_reduction_fac)]
+def get_reduced_data(data_series, multi_factor):
+    if multi_factor>1.0:
+        multi_factor = 1.0
+        
+    return data_series[0:(int)(len(data_series) * multi_factor)]
 
 def clean_text(text):
     return ' '.join(

@@ -21,8 +21,8 @@ from utils import prepare_device
 import ray
 import pprint
 
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = '2,3'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,3'
 
 # fix random seeds for reproducibility
 SEED = 79
@@ -35,7 +35,7 @@ def main(project_config, num_samples=10):
     ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #enable for debugging
 
     tune_config = {
-        "lr": tune.loguniform(1e-6, 1e-2),
+        "lr": tune.loguniform(1e-5, 1e-2),
         "momentum": tune.uniform(0.01, 0.99)
     }
 
@@ -101,7 +101,10 @@ def kfold_train(tune_config, project_config=None):
     k = 1
     expt_data = data_loader_factory.get_data().to_numpy()
 
-    for train_indices, val_indices in kf.split(np.zeros(len(expt_data[:,0])), expt_data[:,3].tolist()):
+    comment_index = 0
+    label_index = 1
+
+    for train_indices, val_indices in kf.split(np.zeros(len(expt_data[:,comment_index])), expt_data[:,label_index].tolist()):
         train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
         val_data_loader = data_loader_factory.get_val_dataloader(val_indices)
         target_data_loader = data_loader_factory.get_target_dataloader()
