@@ -6,7 +6,7 @@ from transformers import BertTokenizer
 
 from base import BaseDataLoader
 from . import get_reduced_data, get_dataloader, \
-    get_balanced_dataloader, clean_text
+    get_balanced_dataloader, clean_text, get_classifier_dataloader
 
 class DatasetClassifierDataloader(BaseDataLoader):
     def __init__(self, data_dir, test_dir, batch_size, tokenizer_name,
@@ -17,9 +17,8 @@ class DatasetClassifierDataloader(BaseDataLoader):
 
         self.germ_eval_eternio = pd.read_table(data_dir, encoding='utf-8')
         self.germ_eval_eternio = get_reduced_data(self.germ_eval_eternio, data_red_factor)
-        # n_samples = len(self.germ_eval)
-        self.germ_eval = pd.read_table(data_dir, encoding='utf-8')
-        self.germ_eval = self._format_germ_eval(self.germ_eval)
+
+        self.germ_eval_test_data = pd.read_table(test_dir, encoding='utf-8')
 
         self.tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
 
@@ -32,7 +31,7 @@ class DatasetClassifierDataloader(BaseDataLoader):
                               self.batch_size, self.num_workers)
 
     def get_test_dataloader(self):
-        return get_dataloader(self.germ_eval_eternio, self.tokenizer,
+        return get_classifier_dataloader(self.germ_eval_test_data, self.tokenizer,
                               self.batch_size, self.num_workers)
 
     def get_data(self):

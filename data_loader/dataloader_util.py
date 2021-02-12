@@ -31,7 +31,8 @@ def get_balanced_dataloader(train_data, tokenizer, batch_size, num_workers):
         'batch_size': batch_size,
         'shuffle': False,
         # 'collate_fn': collate_fn,
-        'num_workers': num_workers
+        'num_workers': num_workers,
+        'sampler': train_sampler
     }
 
     return DataLoader(**train_init_kwargs)
@@ -54,6 +55,24 @@ def get_dataloader(validate_data, tokenizer, batch_size, num_workers):
 
     return DataLoader(**val_init_kwargs)
 
+
+def get_classifier_dataloader(test_data, tokenizer, batch_size, num_workers):
+    test_labels = test_data['dataset_label']
+    test_comments = test_data['comment_text']
+    test_labels, test_comments = test_labels.to_list(), test_comments.to_list()
+    test_secondary_labels = test_data['toxic_label_max']
+
+    test_dataset = Toxic_Dataset(test_labels, test_comments, tokenizer, test_secondary_labels)
+
+    test_init_kwargs = {
+        'dataset': test_dataset,
+        'batch_size': batch_size,
+        'shuffle': False,
+        # 'collate_fn': collate_fn,
+        'num_workers': num_workers
+    }
+
+    return DataLoader(**test_init_kwargs)
 
 def get_reduced_data(data_series, data_reduction_fac):
     return data_series[0:(int)(len(data_series) / data_reduction_fac)]

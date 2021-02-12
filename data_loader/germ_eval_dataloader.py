@@ -40,7 +40,7 @@ class GermEvalDataLoader(BaseDataLoader):
                               self.batch_size, self.num_workers)
 
     def get_test_dataloader(self):
-        return get_dataloader(self.eternio_test, self.tokenizer,
+        return get_dataloader(self.germ_eval, self.tokenizer,
                               self.batch_size, self.num_workers)
 
     def get_data(self):

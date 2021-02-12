@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import pandas as pd
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
@@ -151,12 +152,16 @@ class Trainer(BaseTrainer):
         toxic_prob = []
         target_labels = []
         predicted_labels = []
+        comments = []
+        secondary_labels = []
 
         with torch.no_grad():
             for batch_idx, batch_data in enumerate(self.test_data_loader):
                 input_ids = batch_data.get("input_ids").to(self.device)
                 attention_mask = batch_data.get("attention_mask").to(self.device)
                 target = batch_data.get("targets").to(self.device)
+                comments = comments + batch_data.get('comment_text')
+                secondary_labels = secondary_labels + batch_data.get("secondary_target").tolist()
 
                 output = self.model(input_ids, attention_mask)
                 loss = self.criterion(output, target)
@@ -169,6 +174,12 @@ class Trainer(BaseTrainer):
                 self.test_metrics.update('loss', loss.item())
                 for met in self.metric_ftns:
                     self.test_metrics.update(met.__name__, met(output, target))
+
+        columns = {'comment_text': comments, 'toxic_label_max': secondary_labels,
+                    'eternio_prob': toxic_prob}
+        domain_prob_frame = pd.DataFrame(columns)
+        domain_prob_frame.to_csv('/data/users/nchilwant/training_output/domain_probs.csv',
+                    index=False)
 
         try:
             roc_auc = roc_auc_score(target_labels, toxic_prob)
