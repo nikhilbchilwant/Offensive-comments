@@ -2,11 +2,12 @@ import torch
 from torch.utils.data import Dataset
 
 class Toxic_Dataset(Dataset):
-    def __init__(self, ys, Xs, tokenizer, max_len=128):
+    def __init__(self, ys, Xs, tokenizer, weights=None, max_len=128):
         self.targets = ys
         self.comments = Xs
         self.tokenizer = tokenizer
         self.max_len = max_len
+        self.weights = weights
         # print('self.comments : ', self.comments)
     def __len__(self):
         return len(self.comments)

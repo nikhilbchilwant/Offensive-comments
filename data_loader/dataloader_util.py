@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data import WeightedRandomSampler
 
 from dataset.datasets import Toxic_Dataset
+from torch.utils.data.dataset import ConcatDataset
+from data_loader.batch_sampler import BalancedBatchSchedulerSampler
 
 
 def get_balanced_dataloader(train_data, tokenizer, batch_size, num_workers):
@@ -21,18 +23,21 @@ def get_balanced_dataloader(train_data, tokenizer, batch_size, num_workers):
         [train_samples_weight[label] for label in train_labels])
     train_samples_weight = torch.from_numpy(train_samples_weight)
     train_samples_weight = train_samples_weight.double()
-    train_sampler = WeightedRandomSampler(train_samples_weight,
-                                          len(train_samples_weight))
+    # train_sampler = WeightedRandomSampler(train_samples_weight,
+                                        #   len(train_samples_weight))
 
-    train_dataset = Toxic_Dataset(train_labels, train_comments, tokenizer)
+    train_dataset = Toxic_Dataset(train_labels, train_comments, tokenizer, weights=train_samples_weight)
+    task_datasets = ConcatDataset([train_dataset]) 
+    batch_sampler = BalancedBatchSchedulerSampler(dataset=task_datasets, batch_size=batch_size)
 
     train_init_kwargs = {
-        'dataset': train_dataset,
+        'dataset': task_datasets,
         'batch_size': batch_size,
         'shuffle': False,
         # 'collate_fn': collate_fn,
+
         'num_workers': num_workers,
-        'sampler':train_sampler
+        'sampler':batch_sampler
     }
 
     return DataLoader(**train_init_kwargs)

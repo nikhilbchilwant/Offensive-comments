@@ -7,6 +7,7 @@ class domain_shift_loss(nn.Module):
         super().__init__()
         self.cross_entropy_loss = nn.CrossEntropyLoss()
         self.mmd_loss = MMDStatistic(source_size, target_size)
+        #https://discuss.pytorch.org/t/how-to-learn-the-weights-between-two-losses/39681/2?u=nikhilbchilwant
         self.lam = nn.Parameter(torch.ones(1))
         self.bandwidth = bandwidth
         self.source_size = source_size

@@ -15,16 +15,16 @@ class GermEvalDataLoader(BaseDataLoader):
         self.num_workers = num_workers
         self.batch_size = batch_size
 
-        self.germ_eval = pd.read_csv(data_dir)
+        self.germ_eval = pd.read_table(data_dir)
         self.germ_eval = get_reduced_data(self.germ_eval, multi_factor)
 
         self.tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
         # self.germ_eval = self._format_germ_eval(self.germ_eval)
 
-        self.eternio_test = pd.read_csv(test_dir)
+        self.eternio_test = pd.read_table(test_dir)
         self.eternio_test = self._format_eternio(self.eternio_test)
 
-        self.eternio_target = pd.read_csv(target_domain_dir)
+        self.eternio_target = pd.read_table(target_domain_dir)
         self.eternio_target = self._format_eternio(self.eternio_test)
 
     def get_train_dataloader(self, train_indices):
@@ -58,7 +58,7 @@ class GermEvalDataLoader(BaseDataLoader):
         return data_series
 
     def _format_eternio(self, data_series):
-        data_series.columns = ['id' , 'comment_text', 'toxic_label_max']
+        # data_series.columns = ['id' , 'comment_text', 'toxic_label_max']
         data_series['comment_text'] = data_series['comment_text'].apply(
             lambda x: clean_text(x))
         data_series['toxic_label_max'] = data_series['toxic_label_max']
