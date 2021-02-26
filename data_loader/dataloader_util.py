@@ -10,24 +10,26 @@ from torch.utils.data.dataset import ConcatDataset
 from data_loader.batch_sampler import BalancedBatchSchedulerSampler
 
 
-def get_balanced_dataloader(train_data, tokenizer, batch_size, num_workers):
-    train_labels = train_data['toxic_label_max']
-    train_comments = train_data['comment_text']
-    train_labels, train_comments = train_labels.to_list(), train_comments.to_list()
+def get_balanced_dataloader(train_datasets, tokenizer, batch_size, num_workers):
+    task_train_datasets = []
+    for train_dataset in train_datasets:
+        train_labels = train_dataset['toxic_label_max']
+        train_comments = train_dataset['comment_text']
+        train_labels, train_comments = train_labels.to_list(), train_comments.to_list()  
+        class_sample_count = np.array(
+            [len(np.where(train_labels == t)[0]) for t in np.unique(train_labels)])
+        train_samples_weight = 1. / class_sample_count
+        # print('Class sample count: ', class_sample_count)
+        train_samples_weight = np.array(
+            [train_samples_weight[label] for label in train_labels])
+        train_samples_weight = torch.from_numpy(train_samples_weight)
+        train_samples_weight = train_samples_weight.double()
+        # train_sampler = WeightedRandomSampler(train_samples_weight,
+                                            #   len(train_samples_weight))
+        train_dataset = Toxic_Dataset(train_labels, train_comments, tokenizer, weights=train_samples_weight)
+        task_train_datasets.append(train_dataset)
 
-    class_sample_count = np.array(
-        [len(np.where(train_labels == t)[0]) for t in np.unique(train_labels)])
-    train_samples_weight = 1. / class_sample_count
-    # print('Class sample count: ', class_sample_count)
-    train_samples_weight = np.array(
-        [train_samples_weight[label] for label in train_labels])
-    train_samples_weight = torch.from_numpy(train_samples_weight)
-    train_samples_weight = train_samples_weight.double()
-    # train_sampler = WeightedRandomSampler(train_samples_weight,
-                                        #   len(train_samples_weight))
-
-    train_dataset = Toxic_Dataset(train_labels, train_comments, tokenizer, weights=train_samples_weight)
-    task_datasets = ConcatDataset([train_dataset]) 
+    task_datasets = ConcatDataset(task_train_datasets) 
     batch_sampler = BalancedBatchSchedulerSampler(dataset=task_datasets, batch_size=batch_size)
 
     train_init_kwargs = {
@@ -35,7 +37,6 @@ def get_balanced_dataloader(train_data, tokenizer, batch_size, num_workers):
         'batch_size': batch_size,
         'shuffle': False,
         # 'collate_fn': collate_fn,
-
         'num_workers': num_workers,
         'sampler':batch_sampler
     }
@@ -43,19 +44,26 @@ def get_balanced_dataloader(train_data, tokenizer, batch_size, num_workers):
     return DataLoader(**train_init_kwargs)
 
 
-def get_dataloader(validate_data, tokenizer, batch_size, num_workers):
-    val_labels = validate_data['toxic_label_max']
-    val_comments = validate_data['comment_text']
-    val_labels, val_comments = val_labels.to_list(), val_comments.to_list()
+def get_dataloader(val_datasets, tokenizer, batch_size, num_workers):
+    task_val_datasets = []
+    for val_dataset in val_datasets:
+        val_labels = val_dataset['toxic_label_max']
+        val_comments = val_dataset['comment_text']
+        val_labels, val_comments = val_labels.to_list(), val_comments.to_list()
+        val_dataset = Toxic_Dataset(val_labels, val_comments, tokenizer)
+        task_val_datasets.append(val_dataset)
 
-    val_dataset = Toxic_Dataset(val_labels, val_comments, tokenizer)
+    task_datasets = ConcatDataset(task_val_datasets)
+    batch_sampler = BalancedBatchSchedulerSampler(dataset=task_datasets, batch_size=batch_size)
+
 
     val_init_kwargs = {
-        'dataset': val_dataset,
+        'dataset': task_datasets,
         'batch_size': batch_size,
         'shuffle': False,
         # 'collate_fn': collate_fn,
-        'num_workers': num_workers
+        'num_workers': num_workers,
+        'sampler': batch_sampler
     }
 
     return DataLoader(**val_init_kwargs)

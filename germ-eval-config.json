@@ -13,20 +13,20 @@
     "data_loader": {
         "type": "GermEvalDataLoader",
         "args":{
-            "data_dir": "/data/users/nchilwant/dataset/germ-eval-domain-probs.csv",
-            "test_dir": "/data/users/nchilwant/dataset/eternio/eternio-data.csv",
-            "target_domain_dir":"/data/users/nchilwant/dataset/eternio/eternio-data.csv",
+            "data_dirs": ["/data/users/nchilwant/dataset/mtl/germ-eval18-domain-probs.csv"],
+            "test_dir": "/data/users/nchilwant/dataset/eternio/eternio-data-1.csv",
+            "target_domain_dir":"/data/users/nchilwant/dataset/eternio/eternio-data-1.csv",
             "batch_size": 8,
             "tokenizer_name": "bert-base-german-dbmdz-uncased",
             "num_workers": 4,
-            "multi_factor": 0.01
+            "multi_factor": 1.0
         }
     },
     "loss": {
         "type": "domain_shift_loss",
         "args":{
             "source_size":8,
-            "target_size":146,
+            "target_size":152,
             "bandwidth":2
         }
     },
@@ -41,7 +41,7 @@
         }
     },
     "trainer": {
-        "epochs": 10,
+        "epochs": 1,
         "save_dir": "/data/users/nchilwant/training_output",
         "save_period": 20,
         "verbosity": 2,

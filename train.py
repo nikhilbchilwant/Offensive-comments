@@ -22,20 +22,21 @@ import ray
 import pprint
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,3'
 
 # fix random seeds for reproducibility
-SEED = 79
+SEED = 10
 torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
-def main(project_config, num_samples=10):
+def search_hyperparameters(project_config, num_samples=20):
     ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #enable for debugging
 
     tune_config = {
-        "lr": tune.loguniform(1e-5, 1e-2),
+        # "lr": tune.randn(0.0055573, 5e-5),
+        # "momentum": tune.randn(0.143631, 5e-3)
+         "lr": tune.loguniform(1e-4, 1e-2),
         "momentum": tune.uniform(0.01, 0.99)
     }
 
@@ -57,7 +58,7 @@ def main(project_config, num_samples=10):
         scheduler=scheduler,
         progress_reporter=reporter,
         local_dir='/data/users/nchilwant/training_output/ray_tune',
-        name="domain-adaptation",
+        name="mtl-domain-adaptation",
         # log_to_file=("stdout.log", "stderr.log"),
     )
 
@@ -87,9 +88,17 @@ def kfold_train(tune_config, project_config=None):
     criterion.to(device)
     metrics = [getattr(module_metric, met) for met in project_config['metrics']]
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    # optimizer = project_config.init_obj('optimizer', torch.optim, trainable_params)
-    optimizer = optim.SGD(trainable_params, lr=tune_config["lr"], momentum=tune_config["momentum"])
+    model_trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+    # criterion_trainable_params = filter(lambda p: p.requires_grad, criterion.parameters())
+    # trainable_params = list(model_trainable_params)
+    # trainable_params.extend(list(criterion_trainable_params))
+    # optimizer = project_config.init_obj('optimizer', torch.optim, trainable_params)        #TODO: add loss function parameters
+    #TODO: add loss function parameters
+    # optimizer = optim.SGD([{'params': model_trainable_params},
+    #             {'params': criterion_trainable_params}], 
+    #             lr=tune_config["lr"], momentum=tune_config["momentum"])
+    optimizer = optim.SGD(model_trainable_params, 
+                lr=tune_config["lr"], momentum=tune_config["momentum"])
     lr_scheduler = project_config.init_obj('lr_scheduler', torch.optim.lr_scheduler,
                                    optimizer)
     fold_count = project_config['k-folds']
@@ -99,14 +108,33 @@ def kfold_train(tune_config, project_config=None):
     for key in tune_metrics:
         total_kfold_performance[key] = 0.0
     k = 1
-    expt_data = data_loader_factory.get_data().to_numpy()
+    task_datasets = data_loader_factory.get_datasets()
 
     comment_index = 0
     label_index = 1
 
-    for train_indices, val_indices in kf.split(np.zeros(len(expt_data[:,comment_index])), expt_data[:,label_index].tolist()):
-        train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
-        val_data_loader = data_loader_factory.get_val_dataloader(val_indices)
+    dataset_split_indices = []
+    for dataset in task_datasets:
+        dataset = dataset.to_numpy()
+        train_indices_list = []
+        val_indices_list = []
+        for train_indices, val_indices in kf.split(np.zeros(len(dataset[:,comment_index])),
+            dataset[:,label_index].tolist()):
+            train_indices_list.append(train_indices)
+            val_indices_list.append(val_indices)
+        dataset_split_indices.append([train_indices_list, val_indices_list])
+    
+    dataset_split_indices = np.asarray(dataset_split_indices)
+
+    for split_no in range(0, kf.get_n_splits()):
+        train_splits = []
+        val_splits = []
+        for split_index in dataset_split_indices:
+            train_splits.append(split_index[0][split_no])
+            val_splits.append(split_index[1][split_no])
+
+        train_data_loader = data_loader_factory.get_train_dataloader(train_splits)
+        val_data_loader = data_loader_factory.get_val_dataloader(val_splits)
         target_data_loader = data_loader_factory.get_target_dataloader()
 
         trainer = Trainer(model, criterion, metrics, optimizer,
@@ -132,8 +160,8 @@ def kfold_train(tune_config, project_config=None):
                 f1=total_kfold_performance['val_f1']/fold_count,
                 epoch=best_epoch_log['epoch'])
 
-def train_test(project_config, best_trial_config={"lr":0.0014903967764602632,
-                                                  "momentum":0.4953116658860468}):
+def train_test(project_config, best_trial_config={"lr":0.003269242203193986,
+                                                  "momentum":0.5628770732845748}):
     logger = project_config.get_logger('train')
     # setup data_loader instances
     data_loader_factory = project_config.init_obj('data_loader', module_data)
@@ -151,15 +179,28 @@ def train_test(project_config, best_trial_config={"lr":0.0014903967764602632,
 
     metrics = [getattr(module_metric, met) for met in project_config['metrics']]
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-
-    optimizer = optim.SGD(trainable_params, lr=best_trial_config["lr"],
+    model_trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+    # criterion_trainable_params = filter(lambda p: p.requires_grad, criterion.parameters())
+    # trainable_params = list(model_trainable_params)
+    # trainable_params.extend(list(criterion_trainable_params))
+    # optimizer = optim.SGD([{'params': model_trainable_params},
+    #             {'params': criterion_trainable_params}], lr=best_trial_config["lr"],
+    #                       momentum=best_trial_config["momentum"])
+    optimizer = optim.SGD(model_trainable_params, lr=best_trial_config["lr"],
                           momentum=best_trial_config["momentum"])
 
     lr_scheduler = project_config.init_obj('lr_scheduler', torch.optim.lr_scheduler,
                                    optimizer)
 
-    train_indices = np.arange(len(data_loader_factory.get_data()))
+    task_datasets = data_loader_factory.get_datasets()
+    train_indices = []
+    for dataset in task_datasets:
+        dataset = dataset.to_numpy()
+        train_indices.append(np.arange(len(dataset)))
+
+    train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
+
+    # train_indices = np.arange(len(task_datasets))
     train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
     test_data_loader = data_loader_factory.get_test_dataloader()
     target_data_loader = data_loader_factory.get_target_dataloader()
@@ -196,7 +237,7 @@ if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter(indent=4, depth=6, sort_dicts=False)
     pp.pprint(f'The project conifguration is :{dict(project_config.config.items())}')
-    best_trial = main(project_config)
-    project_config['trainer']['epochs'] = best_trial.last_result['epoch']
+    best_trial = search_hyperparameters(project_config)
+    # project_config['trainer']['epochs'] = best_trial.last_result['epoch']
     train_test(project_config, best_trial.config)
     # train_test(project_config)

@@ -6,7 +6,7 @@ import math
 import torch
 from torch.utils.data.sampler import RandomSampler
 
-
+#https://towardsdatascience.com/unbalanced-data-loading-for-multi-task-learning-in-pytorch-e030ad5033b?source=email-486b68bc632a--writer.postDistributed&sk=1b6abef7a845cb72faa8304aaccfc281
 class BalancedBatchSchedulerSampler(torch.utils.data.sampler.Sampler):
     """
     iterate over tasks and provide a balanced batch per task in each mini-batch
@@ -25,8 +25,10 @@ class BalancedBatchSchedulerSampler(torch.utils.data.sampler.Sampler):
         sampler_iterators = []
         for dataset_idx in range(self.number_of_datasets):
             cur_dataset = self.dataset.datasets[dataset_idx]
-            # sampler = RandomSampler(cur_dataset)
-            sampler = WeightedRandomSampler(cur_dataset.weights,
+            if cur_dataset.weights == None:
+                sampler = RandomSampler(cur_dataset)
+            else:
+                sampler = WeightedRandomSampler(cur_dataset.weights,
                                           len(cur_dataset.weights))
             samplers_list.append(sampler)
             cur_sampler_iterator = sampler.__iter__()

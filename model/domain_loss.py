@@ -16,7 +16,7 @@ class domain_shift_loss(nn.Module):
 
     def forward(self, output, target, latent_source, latent_target):
         result = self.cross_entropy_loss(output, target)
-        result = result * self.lam
+        result = result * (self.lam ** 2) #Prevent lambda being negative
 
         #For the last iteration of an epoch, the batch may contain
         #less no. of samples than self.source_size

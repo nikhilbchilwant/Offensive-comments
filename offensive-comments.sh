@@ -23,5 +23,5 @@ nvidia-smi
 #----------------------------------
 pwd
 echo "Starting the python script"
-python train.py -c germ-eval-config.json
+CUDA_VISIBLE_DEVICES=2 python train.py -c germ-eval-config.json
 echo "Finished execution."
