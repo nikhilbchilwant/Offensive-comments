@@ -35,7 +35,7 @@ def main(project_config, num_samples=50):
     ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #'False' for debugging
 
     tune_config = {
-        "lr": tune.loguniform(1e-5, 1e-2),
+        "lr": tune.loguniform(5e-5, 1e-2),
         "momentum": tune.uniform(0.01, 0.99)
     }
 

@@ -58,7 +58,7 @@ class GermEvalDataLoader(BaseDataLoader):
         return data_series
 
     def _format_eternio(self, data_series):
-        data_series.columns = ['id' , 'comment_text', 'toxic_label_max']
+        # data_series.columns = ['id' , 'comment_text', 'toxic_label_max']
         data_series['comment_text'] = data_series['comment_text'].apply(
             lambda x: clean_text(x))
         data_series['toxic_label_max'] = data_series['toxic_label_max']
