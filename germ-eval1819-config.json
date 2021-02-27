@@ -1,7 +1,7 @@
 {
     "name": "germ-eval1819",
     "n_gpu": 1,
-    "k-folds": 10,
+    "k-folds": 5,
     "ray_local_mode": "False",
     "arch": {
         "type": "JigsawBERTmodel",
@@ -13,9 +13,9 @@
     "data_loader": {
         "type": "GermEvalDataLoader",
         "args":{
-            "data_dir": "/data/users/nchilwant/dataset/mtl/germ-eval18_19_eternio_1.csv",
-            "test_dir": "/data/users/nchilwant/dataset/eternio/eternio-data-1-old.csv",
-            "target_domain_dir":"/data/users/nchilwant/dataset/eternio/eternio-data-1-old.csv",
+            "data_dir": "/data/users/nchilwant/dataset/mtl/germ-eval-1819_domain_probs.csv",
+            "test_dir": "/data/users/nchilwant/dataset/eternio/eternio-complete-comma.csv",
+            "target_domain_dir":"/data/users/nchilwant/dataset/eternio/eternio-complete-comma.csv",
             "batch_size": 8,
             "tokenizer_name": "bert-base-german-dbmdz-uncased",
             "num_workers": 4,
@@ -26,7 +26,7 @@
         "type": "domain_shift_loss",
         "args":{
             "source_size":8,
-            "target_size":146,
+            "target_size":560,
             "bandwidth":2
         }
     },
