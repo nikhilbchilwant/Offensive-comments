@@ -11,7 +11,7 @@
 #$ -e /data/users/nchilwant/log/ -o /data/users/nchilwant/log/
 #  
 # Specify the node on which to run
-#$ -l hostname=cl12lx
+#$ -l hostname=cl16lx
 #----------------------------------
 #  Running some bash commands 
 #----------------------------------
@@ -23,5 +23,5 @@ nvidia-smi
 #----------------------------------
 pwd
 echo "Starting the python script"
-CUDA_VISIBLE_DEVICES=2 python train.py -c germ-eval-config.json
+CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py -c mtl-config.json
 echo "Finished execution."

@@ -1,0 +1,52 @@
+{
+    "name": "filmstarts",
+    "n_gpu": 1,
+    "k-folds": 7,
+    "ray_local_mode": "False",
+    "arch": {
+        "type": "JigsawBERTmodel",
+        "args": {
+            "pretrained_model_name": "bert-base-german-dbmdz-uncased",
+            "num_classes": 2
+        }
+    },
+    "data_loader": {
+        "type": "GermEvalDataLoader",
+        "args":{
+            "data_dirs": ["/data/users/nchilwant/dataset/filmstarts/filmstarts-domain_probs.csv"],
+            "test_dir": "/data/users/nchilwant/dataset/eternio/eternio-complete.csv",
+            "target_domain_dir":"/data/users/nchilwant/dataset/eternio/eternio-complete.csv",
+            "batch_size": 8,
+            "tokenizer_name": "bert-base-german-dbmdz-uncased",
+            "num_workers": 4,
+            "multi_factor": 0.001
+        }
+    },
+    "loss": {
+        "type": "domain_shift_loss",
+        "args":{
+            "source_size":8,
+            "target_size":560,
+            "bandwidth":2
+        }
+    },
+    "metrics": [
+        "accuracy"
+    ],
+    "lr_scheduler": {
+        "type": "StepLR",
+        "args": {
+            "step_size": 50,
+            "gamma": 0.1
+        }
+    },
+    "trainer": {
+        "epochs": 1,
+        "save_dir": "/data/users/nchilwant/training_output",
+        "save_period": 20,
+        "verbosity": 2,
+
+        "monitor": "min val_loss",
+        "early_stop": 1
+    }
+}

@@ -24,13 +24,13 @@ import pprint
 import os
 
 # fix random seeds for reproducibility
-SEED = 10
+SEED = 73
 torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
-def search_hyperparameters(project_config, num_samples=20):
+def search_hyperparameters(project_config, num_samples=50):
     ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #enable for debugging
 
     tune_config = {
@@ -58,7 +58,7 @@ def search_hyperparameters(project_config, num_samples=20):
         scheduler=scheduler,
         progress_reporter=reporter,
         local_dir='/data/users/nchilwant/training_output/ray_tune',
-        name="mtl-domain-adaptation",
+        name=project_config['name'] + "-domain-adaptation",
         # log_to_file=("stdout.log", "stderr.log"),
     )
 
