@@ -22,7 +22,7 @@ import ray
 import pprint
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,3'
+# os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,3'
 
 # fix random seeds for reproducibility
 SEED = 79
@@ -31,8 +31,8 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
-def main(project_config, num_samples=10):
-    ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #enable for debugging
+def main(project_config, num_samples=50):
+    ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #'False' for debugging
 
     tune_config = {
         "lr": tune.loguniform(1e-5, 1e-2),
@@ -57,7 +57,7 @@ def main(project_config, num_samples=10):
         scheduler=scheduler,
         progress_reporter=reporter,
         local_dir='/data/users/nchilwant/training_output/ray_tune',
-        name="domain-adaptation",
+        name=project_config['name']+"-domain-adaptation",
         # log_to_file=("stdout.log", "stderr.log"),
     )
 
