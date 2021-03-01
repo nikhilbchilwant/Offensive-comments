@@ -8,6 +8,8 @@ from base import BaseDataLoader
 from . import get_reduced_data, get_dataloader, \
     get_balanced_dataloader, clean_text
 
+from util import *
+
 class GermEvalDataLoader(BaseDataLoader):
     def __init__(self, data_dirs, test_dir, target_domain_dir, batch_size, tokenizer_name,
                  num_workers=1, multi_factor=1.0):
@@ -20,7 +22,7 @@ class GermEvalDataLoader(BaseDataLoader):
             dataset = pd.read_csv(data_dir)
             dataset = get_reduced_data(dataset, multi_factor)
             self.datasets.append(dataset)
-
+        
         self.tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
 
         self.eternio_test = pd.read_table(test_dir)
@@ -29,22 +31,24 @@ class GermEvalDataLoader(BaseDataLoader):
         self.eternio_target = pd.read_table(target_domain_dir)
         self.eternio_target = self._format_eternio(self.eternio_test)
 
-    def get_train_dataloader(self, train_indices):
+    def get_train_dataloader(self, train_indices, task_names):
         dataset_index = 0
-        sliced_datasets = []
+        sliced_datasets = {}
         assert (len(train_indices) == len(self.datasets)),'Dimension msimatch.'
 
         for dataset_index in range(0, len(self.datasets)):
-            sliced_datasets.append(self.datasets[dataset_index].take(train_indices[dataset_index]))
+            sliced_datasets.update({task_names[dataset_index] : 
+            self.datasets[dataset_index].take(train_indices[dataset_index])})
 
         return get_balanced_dataloader(sliced_datasets,
                                        self.tokenizer, self.batch_size, self.num_workers)
 
-    def get_val_dataloader(self, val_indices):
+    def get_val_dataloader(self, val_indices, task_names):
         dataset_index = 0
-        sliced_datasets = []
+        sliced_datasets = {}
         for dataset_index in range(0, len(self.datasets)):
-            sliced_datasets.append(self.datasets[dataset_index].take(val_indices[dataset_index]))
+            sliced_datasets.update({task_names[dataset_index] :
+             self.datasets[dataset_index].take(val_indices[dataset_index])})
 
         return get_balanced_dataloader(sliced_datasets, self.tokenizer,
                               self.batch_size, self.num_workers)

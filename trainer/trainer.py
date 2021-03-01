@@ -15,9 +15,9 @@ class Trainer(BaseTrainer):
     """
     Trainer class
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
+    def __init__(self, model, criterions, metric_ftns, optimizer, task_names, config, device,
                  data_loader, valid_data_loader=None, test_data_loader=None, target_data_loader=None, lr_scheduler=None, len_epoch=None, save_checkpoint=False):
-        super().__init__(model, criterion, metric_ftns, optimizer, config, save_checkpoint)
+        super().__init__(model, criterions, metric_ftns, optimizer, config, save_checkpoint)
         self.config = config
         self.device = device
         self.data_loader = data_loader
@@ -35,11 +35,20 @@ class Trainer(BaseTrainer):
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
 
-        self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
-        self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
+        self.task_names = task_names
+        self.primary_task = self.task_names[0]
+        self.train_task_metrics = {}
+        self.valid_task_metrics = {}
+        for task in self.task_names:
+            self.train_task_metrics.update({task : MetricTracker(*[m.__name__ for m in self.metric_ftns])})
+            self.valid_task_metrics.update({task : MetricTracker(*[m.__name__ for m in self.metric_ftns])})
+            
+        self.train_metrics = MetricTracker('loss')
+        self.valid_metrics = MetricTracker('loss')
         self.test_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns])
         self.softmax = Softmax(dim=1)
         self.target_labels = ["non-offensive", "offensive"]
+
 
     def _train_epoch(self, epoch):
         """
@@ -48,7 +57,7 @@ class Trainer(BaseTrainer):
         :param epoch: Integer, current training epoch.
         :return: A log that contains average loss and metric in this epoch.
         """
-        self.target_latent = self.get_latent_domain(self.target_data_loader).to(self.device)
+        self.target_latent = self.get_latent_domain(self.target_data_loader, self.primary_task).to(self.device)
 
         self.model.train()
         self.train_metrics.reset()
@@ -57,18 +66,19 @@ class Trainer(BaseTrainer):
             input_ids = batch_data.get("input_ids").to(self.device)
             attention_mask = batch_data.get("attention_mask").to(self.device)
             target = batch_data.get("targets").to(self.device)
+            task = batch_data.get("task")[0] #same task in the whole batch
 
             self.optimizer.zero_grad()
 
-            output, train_latent = self.model(input_ids, attention_mask)
+            output, train_latent = self.model(input_ids, attention_mask, task=task)
 
-            loss = self.criterion(output, target, train_latent, self.target_latent)
+            loss = self.criterions[task](output, target, train_latent, self.target_latent)
             loss.backward()
             self.optimizer.step()
 
             self.train_metrics.update('loss', loss.item())
             for met in self.metric_ftns:
-                self.train_metrics.update(met.__name__, met(output, target))
+                self.train_task_metrics[task].update(met.__name__, met(output, target))
 
             if batch_idx % self.log_step == 0:
                 self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
@@ -79,6 +89,8 @@ class Trainer(BaseTrainer):
             if batch_idx == self.len_epoch:
                 break
         log = self.train_metrics.result()
+        for task in self.task_names:
+            log.update({task : self.train_task_metrics[task].result()})
 
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
@@ -110,9 +122,10 @@ class Trainer(BaseTrainer):
                 input_ids = batch_data.get("input_ids").to(self.device)
                 attention_mask = batch_data.get("attention_mask").to(self.device)
                 target = batch_data.get("targets").to(self.device)
+                task = batch_data.get("task")[0]
 
-                output, valid_latent = self.model(input_ids, attention_mask)
-                loss = self.criterion(output, target, valid_latent, self.target_latent)
+                output, valid_latent = self.model(input_ids, attention_mask, task=task)
+                loss = self.criterions[task](output, target, valid_latent, self.target_latent)
                 pred_prob = self.softmax(output)
                 _, pred_label = torch.max(output, dim=1)
                 toxic_prob = toxic_prob + pred_prob[:,1].tolist()
@@ -126,7 +139,7 @@ class Trainer(BaseTrainer):
                 total += pred_label.size(0)
 
                 for met in self.metric_ftns:
-                    self.valid_metrics.update(met.__name__, met(output, target))
+                    self.valid_task_metrics[task].update(met.__name__, met(output, target))
 
         try:
             roc_auc = roc_auc_score(target_labels, toxic_prob)
@@ -136,6 +149,9 @@ class Trainer(BaseTrainer):
             f1 = -1
 
         metric_logs = self.valid_metrics.result()
+        
+        metric_logs.update(**{key : value for key, value in self.valid_task_metrics[self.primary_task].result().items()})
+        metric_logs.update({'roc_auc':roc_auc})
         metric_logs.update({'roc_auc':roc_auc})
         metric_logs.update({'f1':f1})
         return metric_logs
@@ -153,8 +169,8 @@ class Trainer(BaseTrainer):
                 attention_mask = batch_data.get("attention_mask").to(self.device)
                 target = batch_data.get("targets").to(self.device)
 
-                output, test_latent = self.model(input_ids, attention_mask)
-                loss = self.criterion(output, target, test_latent, self.target_latent)
+                output, test_latent = self.model(input_ids, attention_mask, self.primary_task)
+                loss = self.criterions[self.primary_task](output, target, test_latent, self.target_latent)
                 pred_prob = self.softmax(output)
                 _, pred_label = torch.max(output, dim=1)
                 toxic_prob = toxic_prob + pred_prob[:,1].tolist()
@@ -190,7 +206,7 @@ class Trainer(BaseTrainer):
             total = self.len_epoch
         return base.format(current, total, 100.0 * current / total)
 
-    def get_latent_domain(self, domain_data_loader):
+    def get_latent_domain(self, domain_data_loader, task):
         self.model.eval()
         latent_domain = None
 
@@ -199,7 +215,7 @@ class Trainer(BaseTrainer):
             attention_mask = batch_data.get("attention_mask").to(self.device)
             # target = batch_data.get("targets").to(self.device)
 
-            _, latent = self.model(input_ids, attention_mask)
+            _, latent = self.model(input_ids, attention_mask, task)
             
             latent = latent.cpu()
             if latent_domain is None:

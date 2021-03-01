@@ -23,21 +23,23 @@ import pprint
 
 import os
 
+from util import *
+
 # fix random seeds for reproducibility
-SEED = 73
+SEED = 79
 torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
-def search_hyperparameters(project_config, num_samples=50):
+def search_hyperparameters(project_config, task_names, num_samples=10):
     ray.init(local_mode=(project_config["ray_local_mode"]=="True")) #enable for debugging
 
     tune_config = {
-        # "lr": tune.randn(0.0055573, 5e-5),
-        # "momentum": tune.randn(0.143631, 5e-3)
-         "lr": tune.loguniform(1e-4, 1e-2),
-        "momentum": tune.uniform(0.01, 0.99)
+        "lr": tune.randn(0.0016021948624306845, 5e-5),
+        "momentum": tune.randn(0.7608244628646472, 5e-3)
+        #  "lr": tune.loguniform(5e-5, 1e-2),
+        # "momentum": tune.uniform(0.01, 0.99)
     }
 
     reporter = CLIReporter(
@@ -51,7 +53,7 @@ def search_hyperparameters(project_config, num_samples=50):
         reduction_factor=2)
 
     result = tune.run(
-        partial(kfold_train, project_config=project_config),
+        partial(kfold_train, task_names=task_names, project_config=project_config),
         resources_per_trial={"cpu": 4, "gpu": 1},
         config=tune_config,
         num_samples=num_samples,
@@ -71,7 +73,7 @@ def search_hyperparameters(project_config, num_samples=50):
     return best_trial
 
 
-def kfold_train(tune_config, project_config=None):
+def kfold_train(tune_config, project_config=None, task_names=None):
     logger = project_config.get_logger('train')
     # setup data_loader instances
     data_loader_factory = project_config.init_obj('data_loader', module_data)
@@ -84,9 +86,13 @@ def kfold_train(tune_config, project_config=None):
     if len(device_ids) > 1:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
     # get function handles of loss and metrics
-    criterion = project_config.init_obj('loss', module_loss)
-    criterion.to(device)
-    metrics = [getattr(module_metric, met) for met in project_config['metrics']]
+
+    criterions = {}
+    for task_name in task_names:
+        criterion = project_config.init_obj('loss', module_loss)
+        criterion.to(device)
+        criterions.update({task_name : criterion})
+    
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     model_trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     # criterion_trainable_params = filter(lambda p: p.requires_grad, criterion.parameters())
@@ -97,6 +103,7 @@ def kfold_train(tune_config, project_config=None):
     # optimizer = optim.SGD([{'params': model_trainable_params},
     #             {'params': criterion_trainable_params}], 
     #             lr=tune_config["lr"], momentum=tune_config["momentum"])
+    metric = [getattr(module_metric, met) for met in project_config['metrics']]
     optimizer = optim.SGD(model_trainable_params, 
                 lr=tune_config["lr"], momentum=tune_config["momentum"])
     lr_scheduler = project_config.init_obj('lr_scheduler', torch.optim.lr_scheduler,
@@ -133,18 +140,19 @@ def kfold_train(tune_config, project_config=None):
             train_splits.append(split_index[0][split_no])
             val_splits.append(split_index[1][split_no])
 
-        train_data_loader = data_loader_factory.get_train_dataloader(train_splits)
-        val_data_loader = data_loader_factory.get_val_dataloader(val_splits)
+        train_data_loader = data_loader_factory.get_train_dataloader(train_splits, task_names)
+        val_data_loader = data_loader_factory.get_val_dataloader(val_splits, task_names)
         target_data_loader = data_loader_factory.get_target_dataloader()
 
-        trainer = Trainer(model, criterion, metrics, optimizer,
-                          config=project_config,
-                          device=device,
-                          data_loader=train_data_loader,
-                          valid_data_loader=val_data_loader,
-                          test_data_loader=None,
-                          target_data_loader=target_data_loader,
-                          lr_scheduler=lr_scheduler)
+        trainer = Trainer(model, criterions, metric, optimizer, 
+                        task_names=task_names,
+                        config=project_config,
+                        device=device,
+                        data_loader=train_data_loader,
+                        valid_data_loader=val_data_loader,
+                        test_data_loader=None,
+                        target_data_loader=target_data_loader,
+                        lr_scheduler=lr_scheduler)
         logger.info(f'Training for k-fold (k={k})')
         best_epoch_log = trainer.train()
 
@@ -160,7 +168,7 @@ def kfold_train(tune_config, project_config=None):
                 f1=total_kfold_performance['val_f1']/fold_count,
                 epoch=best_epoch_log['epoch'])
 
-def train_test(project_config, best_trial_config={"lr":0.003269242203193986,
+def train_test(project_config, task_names, best_trial_config={"lr":0.003269242203193986,
                                                   "momentum":0.5628770732845748}):
     logger = project_config.get_logger('train')
     # setup data_loader instances
@@ -174,8 +182,11 @@ def train_test(project_config, best_trial_config={"lr":0.003269242203193986,
     if len(device_ids) > 1:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
     # get function handles of loss and metrics
-    criterion = project_config.init_obj('loss', module_loss)
-    criterion.to(device)
+    criterions = {}
+    for task_name in task_names:
+        criterion = project_config.init_obj('loss', module_loss)
+        criterion.to(device)
+        criterions.update({task_name : criterion})
 
     metrics = [getattr(module_metric, met) for met in project_config['metrics']]
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
@@ -198,13 +209,13 @@ def train_test(project_config, best_trial_config={"lr":0.003269242203193986,
         dataset = dataset.to_numpy()
         train_indices.append(np.arange(len(dataset)))
 
-    train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
 
     # train_indices = np.arange(len(task_datasets))
-    train_data_loader = data_loader_factory.get_train_dataloader(train_indices)
+    train_data_loader = data_loader_factory.get_train_dataloader(train_indices, task_names)
     test_data_loader = data_loader_factory.get_test_dataloader()
     target_data_loader = data_loader_factory.get_target_dataloader()
-    trainer = Trainer(model, criterion, metrics, optimizer,
+    trainer = Trainer(model, criterions, metrics, optimizer,
+                      task_names=task_names,
                       config=project_config,
                       device=device,
                       data_loader=train_data_loader,
@@ -234,10 +245,14 @@ if __name__ == '__main__':
         CustomArgs(['--bs', '--batch_size'], type=int, target='data_loader;args;batch_size')
     ]
     project_config = ConfigParser.from_args(args, options)
+    task_names = get_task_names(project_config['data_loader']['args']['data_dirs'])
+    (project_config['arch']['args']).update({'task_names':task_names})
 
     pp = pprint.PrettyPrinter(indent=4, depth=6, sort_dicts=False)
     pp.pprint(f'The project conifguration is :{dict(project_config.config.items())}')
-    best_trial = search_hyperparameters(project_config)
-    # project_config['trainer']['epochs'] = best_trial.last_result['epoch']
-    train_test(project_config, best_trial.config)
-    # train_test(project_config)
+
+   
+    best_trial = search_hyperparameters(project_config, task_names)
+    project_config['trainer']['epochs'] = best_trial.last_result['epoch']
+    train_test(project_config, task_names, best_trial.config)
+    # train_test(project_config, task_names)
