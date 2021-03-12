@@ -4,7 +4,7 @@ from dataset.datasets import Toxic_Dataset
 
 import math
 import torch
-from torch.utils.data.sampler import RandomSampler
+from torch.utils.data.sampler import SequentialSampler
 
 #Taken from https://gist.github.com/bomri/d93da3e6f840bb93406f40a6590b9c48
 class BalancedBatchSchedulerSampler(torch.utils.data.sampler.Sampler):
@@ -26,7 +26,7 @@ class BalancedBatchSchedulerSampler(torch.utils.data.sampler.Sampler):
         for dataset_idx in range(self.number_of_datasets):
             cur_dataset = self.dataset.datasets[dataset_idx]
             if cur_dataset.weights == None:
-                sampler = RandomSampler(cur_dataset)
+                sampler = SequentialSampler(cur_dataset)
             else:
                 sampler = WeightedRandomSampler(cur_dataset.weights,
                                           len(cur_dataset.weights))

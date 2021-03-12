@@ -10,6 +10,8 @@ from model.sentiment import SentimentModel
 from ray import tune
 from sklearn.metrics import f1_score
 from sklearn.metrics import classification_report
+# from model.clipper import Clipper
+import pandas as pd
 
 class Trainer(BaseTrainer):
     """
@@ -61,6 +63,7 @@ class Trainer(BaseTrainer):
 
         self.model.train()
         self.train_metrics.reset()
+        # clipper = Clipper()
 
         for (batch_idx, batch_data) in enumerate(self.data_loader):
             input_ids = batch_data.get("input_ids").to(self.device)
@@ -74,6 +77,7 @@ class Trainer(BaseTrainer):
 
             loss = self.criterions[task](output, target, train_latent, self.target_latent)
             loss.backward()
+            # self.criterions[task].apply(clipper)
             self.optimizer.step()
 
             self.train_metrics.update('loss', loss.item())
@@ -162,12 +166,14 @@ class Trainer(BaseTrainer):
         toxic_prob = []
         target_labels = []
         predicted_labels = []
+        comments = []
 
         with torch.no_grad():
             for batch_idx, batch_data in enumerate(self.test_data_loader):
                 input_ids = batch_data.get("input_ids").to(self.device)
                 attention_mask = batch_data.get("attention_mask").to(self.device)
                 target = batch_data.get("targets").to(self.device)
+                comments = comments + batch_data.get('comment_text')
 
                 output, test_latent = self.model(input_ids, attention_mask, self.primary_task)
                 loss = self.criterions[self.primary_task](output, target, test_latent, self.target_latent)
@@ -181,6 +187,10 @@ class Trainer(BaseTrainer):
                 for met in self.metric_ftns:
                     self.test_metrics.update(met.__name__, met(output, target))
 
+        columns = {'comment_text': comments, 'target_label': target_labels,
+                    'predicted_label_' + self.config['name']: predicted_labels}
+        domain_prob_frame = pd.DataFrame(columns)
+        domain_prob_frame.to_csv('./eternio_prediction_' + self.config['name'] + '.csv', index=False, mode='a')
 
         try:
             roc_auc = roc_auc_score(target_labels, toxic_prob)
