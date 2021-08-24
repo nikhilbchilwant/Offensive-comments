@@ -1,6 +1,6 @@
 # Offensive-comments
 
-Immplementation of data selection with multi-task learning method to detect offensive comments. The ideas was taken from [Domain Adaptation with BERT-based Domain Classification and Data
+Immplementation of data selection with multi-task learning method to detect offensive comments. The idea was taken from [Domain Adaptation with BERT-based Domain Classification and Data
 Selection](https://assets.amazon.science/d6/7c/c2954857435a921ab0fb988e9caa/domain-adaptation-with-bert-based-domain-classification-and-data-selection.pdf).
 
 The Scikit classification report:
