@@ -20,3 +20,5 @@ Branches:
 - domain-classifier : Trains BERT to find the probability with which a comment in the dataset (say Germ Eval 2017) will belong to the Eternio dataset (target dataset).
 - domain-adaptation-single-task : Supports fine tuning the BERT model for a single task.
 - mtl : Supports fine tuning the BERT model for a multiple tasks. I referred [MT-DNN](https://github.com/microsoft/MT-DNN) for this.
+
+[Download the thesis document here.](https://github.com/nikhilbchilwant/Offensive-comments/blob/dev/msc_chilwant_nikhil.pdf)
